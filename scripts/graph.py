@@ -466,7 +466,7 @@ input_geo_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/Sketch
 
 input_xml_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.xml" 
 
-output_geo_path = "results/selection0_convex.geo"
+output_geo_path = "data/selection0_convex.geo"
 
 
 def convex_temp():

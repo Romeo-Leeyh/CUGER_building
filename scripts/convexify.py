@@ -282,8 +282,10 @@ class Geometry_Option:
                             verts.append(verts_all[current_idx])
                         # 再次添加当前外围顶点以闭合
                         verts.append(verts_all[idx])
+        
+        mergelines = [np.array([verts_all[pair[0]], verts_all[pair[1]]]) for pair in diagonals]
 
-        return np.array(verts), diagonals
+        return np.array(verts), mergelines
     
     @staticmethod
     def split_poly(verts: np.ndarray, indices: np.ndarray) -> Union[List[np.ndarray], List[Tuple[int, int]]]:
@@ -519,9 +521,9 @@ class MoosasConvexify:
                         hole_verts = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
                         poly_in[i] = hole_verts
                     
-                    verts, diags = Geometry_Option.merge_holes(poly_ex,  poly_in)
-                    print (verts,diags)
-
+                    verts, mergelines = Geometry_Option.merge_holes(poly_ex,  poly_in)
+                    divide_lines.extend(mergelines)
+                    
                 else:
                     verts = poly_ex
 
@@ -544,6 +546,7 @@ class MoosasConvexify:
                     if diags:
                         sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
                         divide_lines.extend(sublines)
+                    print (divide_lines)
 
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)

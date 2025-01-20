@@ -1,5 +1,4 @@
 import numpy as np
-import math
 import matplotlib.pyplot as plt
 from typing import Union, List, Tuple
 from collections import defaultdict
@@ -7,57 +6,6 @@ from collections import defaultdict
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-
-
-class UnionFind:
-    def __init__(self, n):
-        self.parent = list(range(n))
-        self.rank = [0] * n
-
-    def find(self, x):
-        if self.parent[x] != x:
-            self.parent[x] = self.find(self.parent[x])  # 路径压缩
-        return self.parent[x]
-
-    def union(self, x, y):
-        root_x = self.find(x)
-        root_y = self.find(y)
-        if root_x != root_y:
-            if self.rank[root_x] > self.rank[root_y]:
-                self.parent[root_y] = root_x
-            elif self.rank[root_x] < self.rank[root_y]:
-                self.parent[root_x] = root_y
-            else:
-                self.parent[root_y] = root_x
-                self.rank[root_x] += 1
-
-def distance(p1, p2):
-    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-
-def minimum_spanning_tree(polygons):
-    # 获取所有顶点
-    points = []
-    for polygon in polygons:
-        points.extend(polygon)
-    
-    # 构建所有边及其权重
-    edges = []
-    for i in range(len(points)):
-        for j in range(i + 1, len(points)):
-            edges.append((distance(points[i], points[j]), i, j))
-    
-    # 按权重排序
-    edges.sort()
-
-    # Kruskal 算法构建最小生成树
-    uf = UnionFind(len(points))
-    mst = []
-    for weight, u, v in edges:
-        if uf.find(u) != uf.find(v):
-            uf.union(u, v)
-            mst.append((u, v, weight))
-    
-    return mst
 
 class BasicOptions:
     @staticmethod
@@ -89,7 +37,12 @@ class BasicOptions:
         # 根据叉积z分量判断旋转方向
         return angle_deg if cross[2] > 0 else -angle_deg
 
-
+    @staticmethod
+    def get_angle_tan(p1, p2, verts_all):
+        """计算两点连线与x轴正方向的夹角(弧度制)"""
+        vec = verts_all[p2] - verts_all[p1]
+        return np.arctan2(vec[1], vec[0])
+    
     @staticmethod
     def is_obtuse(v1, v2, v3):
         return BasicOptions.angle(v1, v2, v3) > 90
@@ -239,7 +192,6 @@ class Geometry_Option:
             # 遍历当前洞的所有顶点
             for hole_idx, hole_vert_idx in enumerate(indices_hole):
                 hole_vertex = verts_hole[hole_idx]  # 使用hole_idx而不是hole_vert_idx
-                print (f"hole_idx:{hole_idx}, hole_vert_idx:{hole_vert_idx}, hole_vertex:{hole_vertex}")
                 # 检查与外围多边形顶点的连接
                 for poly_idx, poly_vertex_idx in enumerate(indices_poly):
                     poly_vertex = verts_poly[poly_idx]
@@ -290,17 +242,49 @@ class Geometry_Option:
                         diagonal_length = np.linalg.norm(poly_vertex - hole_vertex)
                         if diagonal_length < min_diagonal_length:
                             min_diagonal_length = diagonal_length
-                            min_diagonal = (hole_vert_idx, poly_vertex_idx)
+                            min_diagonal = (poly_vertex_idx, hole_vert_idx)
             
             if min_diagonal is not None:
                 best_diagonals[hole_id] = min_diagonal
 
         # 构建连接线列表
         diagonals = []
-        for hole_id, (h_idx, p_idx) in best_diagonals.items():
-            diagonals.append((h_idx, p_idx))
         
-        return indices_all, diagonals
+        for hole_id, (p_idx, h_idx) in best_diagonals.items():
+            diagonals.append((p_idx, h_idx))
+        diagonals = sorted(diagonals, key=lambda x: (x[0], -BasicOptions.get_angle_tan(x[0], x[1], verts_all)))
+
+        # 构建新的顶点列表
+        verts = []
+        for idx in indices_poly:
+            verts.append(verts_all[idx])
+            
+            # 检查是否有从当前顶点出发的连线
+            for diagonal in diagonals:
+                if diagonal[0] == idx:
+                    hole_vertex = diagonal[1]
+                    # 找出这个洞顶点属于哪个洞
+                    target_hole_id = None
+                    target_hole_indices = None
+                    for hole_id, hole_indices in indices_holes.items():
+                        if hole_vertex in hole_indices:
+                            target_hole_id = hole_id
+                            target_hole_indices = hole_indices
+                            break
+                    
+                    if target_hole_indices:
+                        # 从连线端点开始遍历洞的顶点
+                        start_idx = target_hole_indices.index(hole_vertex)
+                        n_hole = len(target_hole_indices)
+                        # 按顺序添加洞的顶点
+                        for i in range(n_hole + 1):  # +1 是为了回到起点
+                            current_idx = target_hole_indices[(start_idx + i) % n_hole]
+                            verts.append(verts_all[current_idx])
+                        # 再次添加当前外围顶点以闭合
+                        verts.append(verts_all[idx])
+
+        return np.array(verts), diagonals
+    
     @staticmethod
     def split_poly(verts: np.ndarray, indices: np.ndarray) -> Union[List[np.ndarray], List[Tuple[int, int]]]:
         """
@@ -521,18 +505,22 @@ class MoosasConvexify:
             convex_idd.append(idd[idx])
             convex_normal.append(normal[idx])
             convex_faces.append(face)
+            
+            is_upward = normal[idx][2] > 0
 
             if np.abs(normal[idx][2]) > 1e-3:  # wall判断
-                poly_ex = Geometry_Option.reorder_vertices(face, is_upward=True)
+                poly_ex = Geometry_Option.reorder_vertices(face, is_upward=is_upward)
                 
                 # 处理多个洞的情况
                 if holes[idx]:
+                    
                     poly_in = {}
                     for i in range(len(holes[idx])):
-                        hole_verts = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=True)
+                        hole_verts = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
                         poly_in[i] = hole_verts
-
-                    verts = Geometry_Option.merge_holes(poly_ex,  poly_in)
+                    
+                    verts, diags = Geometry_Option.merge_holes(poly_ex,  poly_in)
+                    print (verts,diags)
 
                 else:
                     verts = poly_ex
@@ -542,13 +530,6 @@ class MoosasConvexify:
 
                 polys, diags = Geometry_Option.split_poly(verts, indices)
                 
-                print ("----convexification----")
-                print (
-                    f"verts:{verts}\n"
-                    f"indices:{indices}\n"
-                    f"polys:{polys}\n"
-                    f"diags:{diags}\n"
-                )
                 subfaces = [verts[poly] for poly in polys]
                 
                 if len(subfaces) == 1:
@@ -578,16 +559,5 @@ class MoosasConvexify:
         MoosasConvexify.plot_faces(convex_faces, divide_lines)
 
         return convex_cat, convex_idd, convex_normal, convex_faces
-
-
-
-#main
-user_profile = os.environ['USERPROFILE']
-
-input_geo_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0_out.geo"   
-
-input_xml_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.xml" 
-
-output_geo_path = "results/selection0_convex.geo"
 
 

@@ -44,6 +44,7 @@ class OBB:
             # 获取 OBB 参数
             obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
             obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
+            obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
 
             # 计算边向量
             x_vec = obb_coords[1] - obb_coords[0]
@@ -72,7 +73,7 @@ class OBB:
             h = max(np.max(points[:, 2])-np.min(points[:, 2]), min_scale) 
 
             original_obb_centroid = np.mean(obb_coords, axis=0)
-
+            
         else:
             x_r = np.cross(z_r, z_axis)
             y_r = np.cross(z_r, x_r)
@@ -91,7 +92,7 @@ class OBB:
                 [np.min(rotated_points[:, 0]), np.min(rotated_points[:, 1]), np.min(rotated_points[:, 2])],
                 [np.max(rotated_points[:, 0]), np.max(rotated_points[:, 1]), np.max(rotated_points[:, 2])]
             ], axis=0)
-
+            
             # 反向旋转 OBB 坐标
             original_obb_centroid = np.dot(centroid, rotation_matrix)
 
@@ -173,8 +174,6 @@ class MoosasGraph:
         self.spaces = []
         self.faces = []
         self.positions = {}
-        self.fig = None
-        self.ax = None
 
     def graph_representation(self, geo_path, xml_path):
         """
@@ -304,7 +303,8 @@ class MoosasGraph:
                     space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["vertices"])
 
             obb_params = OBB.create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
-            OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
+            #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
+
             space_params = {
                 "center": obb_params['center'],
                 "scale": obb_params['scale'],
@@ -314,18 +314,18 @@ class MoosasGraph:
 
             self.graph.nodes[space_id]["space_params"] = space_params
 
+
     def draw_graph_3d(self):
         """绘制图结构的三维表示"""
         fig = plt.figure(figsize=(12, 8))
         ax = fig.add_subplot(111, projection='3d')
         
-        # 为不同类型的节点使用不同颜色
         colors = {
-            'window': 'blue',
-            'shading': 'green',
-            'floor': 'yellow',
-            'wall': 'red',
-            None: 'gray'  # 默认颜色
+            'window': 'skyblue',
+            'shading': 'yellowgreen',
+            'floor': 'sandybrown',
+            'wall': 'mediumpurple',
+            None: 'gray'  
         }
         
         # 绘制节点
@@ -335,7 +335,7 @@ class MoosasGraph:
                 
                 node_type = self.graph.nodes[node]['face_params']['type']
 
-                color = colors.get(node_type, 'red')
+                color = colors.get(node_type, 'brown')
                 
                 ax.scatter(center[0], center[1], center[2], 
                         c=color, s=50)
@@ -344,7 +344,7 @@ class MoosasGraph:
                 center = self.graph.nodes[node]['space_params']['center']
                 
                 ax.scatter(center[0], center[1], center[2], 
-                        c='red', s=100)
+                        c='brown', s=100)
 
         
         # 绘制边
@@ -355,10 +355,10 @@ class MoosasGraph:
                 
                 start_pos = self.graph.nodes[start_node]['face_params']['center']
                 end_pos = self.graph.nodes[end_node]['face_params']['center']
-                
+
                 # 获取边的属性
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
-                edge_color = 'gray' if edge_attr == 'default' else 'orange'
+                edge_color = 'pink' if edge_attr == 'default' else 'orange'
                 
                 # 绘制边
                 ax.plot([start_pos[0], end_pos[0]],
@@ -367,20 +367,20 @@ class MoosasGraph:
                     color=edge_color, linestyle='-', alpha=0.5)
 
             if ('space_params' in self.graph.nodes[start_node] and 
-                'space_params' in self.graph.nodes[end_node]):
+                'face_params' in self.graph.nodes[end_node]):
                 
                 start_pos = self.graph.nodes[start_node]['space_params']['center']
-                end_pos = self.graph.nodes[end_node]['space_params']['center']
-                
+                end_pos = self.graph.nodes[end_node]['face_params']['center']
+
                 # 获取边的属性
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
-                edge_color = 'gray' if edge_attr == 'default' else 'orange'
+                edge_color = 'gray' 
                 
                 # 绘制边
                 ax.plot([start_pos[0], end_pos[0]],
                     [start_pos[1], end_pos[1]],
                     [start_pos[2], end_pos[2]],
-                    color=edge_color, linestyle='-', alpha=0.5)
+                    color=edge_color, linestyle='--', alpha=0.5)
                     
         # 添加图例
         legend_elements = [
@@ -394,6 +394,19 @@ class MoosasGraph:
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
+
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        
+        # 调整网格线
+        ax.grid(True, alpha=0.3)
+        
+        # 调整坐标轴颜色为浅灰色
+        grey_color = '#666666'
+        ax.xaxis.line.set_color(grey_color)
+        ax.yaxis.line.set_color(grey_color)
+        ax.zaxis.line.set_color(grey_color)
         plt.title('Building Graph 3D Visualization')
         plt.show()
 

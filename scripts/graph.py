@@ -6,333 +6,20 @@ import matplotlib.pyplot as plt
 
 import xml.etree.ElementTree as ET
 import convexify
-from IO import read_geo, write_geo
+from graphIO import read_geo, write_geo, read_xml
 from scipy.spatial.transform import Rotation as R
 
 
-
-class MoosasGraph:
+class OBB:
     """
-    图化模块
-    用于将建筑空间转为结构化有向图
-    1   将空间识别为定向包容盒(oriented bounding box)
-        表征参数: 5维向量(length, )
-
-        边表征参数：
-            space-face：方向；面属性（floor wall roof）
-            face-face：关系（相接、附着、属于                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ）
-        需要调整的地方：
-            geo_out编号与xml一一对应，所以在重新生成geo后的编号也要调整，需要建立一个geo_out与geo_convex之间的索引字典
-
-            获取新的xml的索引方式：
-                感觉得重新调整一下输出xml的格式，先分割面生成新的geo_out再transform，要不然很麻烦
-                
-                创建面节点（geo_convex）
-                创建基于原xml的标准图（）
-
+    Oriented Bounding Box (OBB) Class
+    Converts the space and faces into a OBB representation
+        center = (x,y,z) # 3D center of the OBB
+        scale = (l,w,h)  # 3D scale of the OBB
+        rotation = R(3x3) # 3x3 rotation matrix of the OBB
     """
-    def __init__(self):
-        """初始化一个空的有向图、空void、空面"""
-        self.graph = nx.DiGraph() 
-        self.face_graph = nx.Graph()
-        self.spaces = []
-        self.faces = []
-        self.positions = {}
-        self.fig = None
-        self.ax = None
 
-    def graph_representation_xml(self, geo_path, xml_path):
-        """
-            解析.xml和关联的.geo文件并构建图
-            Args:  
-                geo_path(str): *.geo file path
-                xml_path(str): *.xml file path
-            Returns:
-                graph
-        """
-        faces_id = []
-        faces_category =[]
-        faces_normal = []
-        faces_vertices = []
-
-        spaces_id = []
-        spaces_area = []
-        spaces_hegiht = []
-        spaces_boundary = []
-        
-        # 0.0   初始化读入文件
-        faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(geo_path)
-
-        tree = ET.parse(xml_path)
-        root = tree.getroot()
-
-        # 0.1   创建 Uid 和 faceId 映射字典
-        dict_u = {}
-
-        for elem in root.findall('face') + root.findall('wall') + root.findall('glazing'):
-            
-            face_id = elem.find('faceId').text
-            uid = elem.find('Uid').text
-            
-            dict_u[face_id] = uid
-    
-        # 1.1   Adding face nodes (FROM .geo)
-        for i in range(len(faces_id)):
-            face = {
-                'category': faces_category[i],
-                'id': faces_id[i],
-                'normal': np.array(faces_normal[i]),
-                'vertices': np.array(faces_vertices[i])
-            }
-
-            self.faces.append(face)
-            face_params = self.create_obb(np.array(faces_vertices[i]), np.array(faces_normal[i]))
-            
-            self.plot_obb_and_points(face['vertices'], face_params)
-            
-            
-            self.graph.add_node(dict_u[face_id], face_params=face_params)
-        
-        plt.show()
-
-        # 1.2   Adding face edges
-        for face in root.findall('face') + root.findall('wall'):
-            
-            uid = face.find('Uid').text
-            glazingid = face.find('glazingId').text
-
-            if glazingid is not None:
-                glazings = glazingid.split()
-                for glazing in glazings:
-                    # 如果邻接的 glazingid 不为空，则添加边
-                    self.graph.add_edge(uid, glazing, attr='glazing')
-            neighbors = face.find('neighbor')
-
-            if neighbors is not None:
-                for edge in neighbors.findall('edge'):
-                    edge_keys = edge.text.split()
-                    for key in edge_keys:
-                        # 如果邻接的 faceId 不为空，则添加边
-                        self.graph.add_edge(uid, key)
-
-        
-        # 创建face-space边
-        for space in root.findall('space'):
-            
-            space_id = space.find('id').text.strip() 
-            print (space_id)
-            space_area = space.find('area')
-            space_height = space.find('height')
-            space_boundary = space.find('boundary')
-
-            spaces_id.append(space_id)
-            spaces_area.append(space_area)
-            spaces_hegiht.append(space_height)
-            spaces_boundary.append(space_boundary)
-            #self.graph.add_node(space_id)  # 将 <id> 添加为图的节点
-
-            # 获取 <boundary> 中的所有 <pt> 坐标点，计算中点
-            if space_boundary is not None:
-                pts = space_boundary.findall('pt')
-                
-                coords = []
-                for pt in pts:
-                    x, y, z = map(float, pt.text.split())  # 将字符串转为浮点数坐标
-                    coords.append([x, y, z])
-                
-                if coords:
-                    coords = np.array(coords)
-                    center = coords.mean(axis=0)  # 计算中点
-                    self.positions[space_id] = center  # 存储空间的中心点坐标
-            
-
-            # 查找 <space> 节点下的所有 <neighbor> 节点，添加边
-            for neighbor in space.findall('neighbor'):
-                neighbor_id = neighbor.text.strip()  # 获取 <neighbor> 中的空间 ID
-                face_id = neighbor.attrib.get('Faceid')  # 获取 Faceid 属性
-                self.graph.add_edge(space_id, neighbor_id, Faceid=face_id)  # 添加边并附加 Faceid 属性
-
-    def draw_graph_3d(self):
-        """绘制图结构的三维表示"""
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        for face in self.faces:
-            
-            verts = face['vertices']
-            x, y, z = verts[:, 0], verts[:, 1], verts[:, 2]
-
-            x = np.append(x, x[0])
-            y = np.append(y, y[0])
-            z = np.append(z, z[0])    
-
-            ax.plot(x, y, z, 'pink')  # 绘制多边形的边
-            ax.scatter(x, y, z, c='grey', marker='o', s=10)
-        
-        # 从 positions 中获取坐标
-        for node, pos in self.positions.items():
-            ax.scatter(pos[0], pos[1], pos[2], color='purple', s=50)
-            ax.text(pos[0], pos[1], pos[2], node, size=10, zorder=1, color='k')
-
-        # 绘制边
-        for edge in self.face_graph.edges():
-            start, end = edge
-            if start in self.positions and end in self.positions:
-                start_pos = self.positions[start]
-                end_pos = self.positions[end]
-                ax.plot([start_pos[0], end_pos[0]], 
-                        [start_pos[1], end_pos[1]], 
-                        [start_pos[2], end_pos[2]], color='gray')
-
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        plt.show()
-
-    def get_nodes(self):
-        """获取图中的所有节点"""
-        return self.face_graph.nodes(data=True)
-
-    def get_edges(self):
-        """获取图中的所有边"""
-        return self.face_graph.edges(data=True)
-    
-    def write_gragh_json (self, json_path):
-        
-        return
-
-    def plot_points(points):
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o', label="Points")
-        # 设置坐标轴标签
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.set_box_aspect([1, 1, 1])
-        # 显示图例
-        ax.legend()
-
-        # 显示图形
-        plt.show()
-
-    def plot_obb_and_points(points, obb_params):
-        """
-        可视化点云和计算得到的 OBB
-        
-        参数:
-            points: np.ndarray, 点坐标数组，形状为 (N, 3)
-            obb_params: dict, 包含 OBB 相关的 15 个参数
-                center：OBB的中心点
-                scale：OBB的尺寸参数长宽高
-                rotation：OBB的相对原点3*3旋转矩阵
-        """
-        # 提取 OBB 参数
-        center = obb_params['center']
-        l, w, h = obb_params['scale']
-        Rot = obb_params['rotation']
-
-        # 8 个 OBB 角点的偏移量
-        offsets = np.array([
-            [-l/2, -w/2, -h/2],
-            [ l/2, -w/2, -h/2],
-            [ l/2,  w/2, -h/2],
-            [-l/2,  w/2, -h/2],
-            [-l/2, -w/2,  h/2],
-            [ l/2, -w/2,  h/2],
-            [ l/2,  w/2,  h/2],
-            [-l/2,  w/2,  h/2]
-        ])
-
-        # 旋转并平移 OBB 角点
-        corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
-
-        # 绘制点云
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o', label="Points")
-
-        # 连接 OBB 角点的边来构建立方体
-        edges = [
-            [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
-            [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
-            [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
-        ]
-
-        # 通过 plot 直接绘制 OBB 的边
-        for edge in edges:
-            ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
-                    [corners[edge[0], 1], corners[edge[1], 1]], 
-                    [corners[edge[0], 2], corners[edge[1], 2]], 
-                    color='b')
-
-        # 设置坐标轴标签
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.set_box_aspect([1, 1, 1])
-        # 显示图例
-        ax.legend()
-
-        # 显示图形
-        plt.show()
-
-    def plot_obb_and_points(self, points, obb_params):
-        # 提取 OBB 参数
-        center = obb_params['center']
-        l, w, h = obb_params['scale']
-        Rot = obb_params['rotation']
-
-        # 8 个 OBB 角点的偏移量
-        offsets = np.array([
-            [-l/2, -w/2, -h/2],
-            [ l/2, -w/2, -h/2],
-            [ l/2,  w/2, -h/2],
-            [-l/2,  w/2, -h/2],
-            [-l/2, -w/2,  h/2],
-            [ l/2, -w/2,  h/2],
-            [ l/2,  w/2,  h/2],
-            [-l/2,  w/2,  h/2]
-        ])
-
-        # 旋转并平移 OBB 角点
-        corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
-
-        # 如果还没有创建图形和坐标轴，则创建它们
-        if self.fig is None or self.ax is None:
-            self.fig = plt.figure()
-            self.ax = self.fig.add_subplot(111, projection='3d')
-
-        # 绘制点云
-        self.ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o')
-
-        # 连接 OBB 角点的边来构建立方体
-        edges = [
-            [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
-            [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
-            [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
-        ]
-
-        # 通过 plot 直接绘制 OBB 的边
-        for edge in edges:
-            self.ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
-                         [corners[edge[0], 1], corners[edge[1], 1]], 
-                         [corners[edge[0], 2], corners[edge[1], 2]], 
-                         color='b')
-
-    def show_plot(self):
-        # 设置坐标轴标签
-        self.ax.set_xlabel('X')
-        self.ax.set_ylabel('Y')
-        self.ax.set_zlabel('Z')
-        self.ax.set_box_aspect([1, 1, 1])
-        # 显示图例
-        self.ax.legend()
-        # 显示图形
-        plt.show()
-
-    def create_obb(self, points, normal, min_scale = 0.1):
+    def create_obb(points, normal, min_scale = 0.1):
         """
         创建点集的定向包围盒 (OBB)，并返回 OBB 参数
         参数:
@@ -358,8 +45,24 @@ class MoosasGraph:
             obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
             obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
 
-            x_r = (obb_coords[1] - obb_coords[0])/np.linalg.norm(obb_coords[1] - obb_coords[0])
-            y_r = (obb_coords[3] - obb_coords[0])/np.linalg.norm(obb_coords[3] - obb_coords[0])
+            # 计算边向量
+            x_vec = obb_coords[1] - obb_coords[0]
+            y_vec = obb_coords[3] - obb_coords[0]
+            
+            # 计算范数
+            x_norm = np.linalg.norm(x_vec)
+            y_norm = np.linalg.norm(y_vec)
+            
+            # 检查范数并计算单位向量
+            if x_norm > 1e-6:
+                x_r = x_vec / x_norm
+            else:
+                x_r = np.array([1, 0, 0])  # 默认x方向
+                
+            if y_norm > 1e-6:
+                y_r = y_vec / y_norm
+            else:
+                y_r = np.array([0, 1, 0])  # 默认y方向
 
             rotation = np.array([x_r, y_r, z_r])
             rotation_matrix = R.from_matrix(rotation).as_matrix()
@@ -400,8 +103,284 @@ class MoosasGraph:
         }
 
         return obb_params
+    
+    def plot_obb_and_points(points, obb_params):
+        
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        # 提取 OBB 参数
+        center = obb_params['center']
+        l, w, h = obb_params['scale']
+        Rot = obb_params['rotation']
+
+        # 8 个 OBB 角点的偏移量
+        offsets = np.array([
+            [-l/2, -w/2, -h/2],
+            [ l/2, -w/2, -h/2],
+            [ l/2,  w/2, -h/2],
+            [-l/2,  w/2, -h/2],
+            [-l/2, -w/2,  h/2],
+            [ l/2, -w/2,  h/2],
+            [ l/2,  w/2,  h/2],
+            [-l/2,  w/2,  h/2]
+        ])
+
+        # 旋转并平移 OBB 角点
+        corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
+
+        # 绘制点云
+        ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o')
+
+        # 连接 OBB 角点的边来构建立方体
+        edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
+            [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
+            [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
+        ]
+
+        # 通过 plot 直接绘制 OBB 的边
+        for edge in edges:
+            ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
+                    [corners[edge[0], 1], corners[edge[1], 1]], 
+                    [corners[edge[0], 2], corners[edge[1], 2]], 
+                    color='b')
+
+class MoosasGraph:
+    """
+    图化模块
+    用于将建筑空间转为结构化有向图
+    1   将空间识别为定向包容盒(oriented bounding box)
+        表征参数: 5维向量(length, )
+
+        边表征参数：
+            space-face：方向；面属性（floor wall roof）
+            face-face：关系（相接、附着、属于                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ）
+        需要调整的地方：
+            geo_out编号与xml一一对应，所以在重新生成geo后的编号也要调整，需要建立一个geo_out与geo_convex之间的索引字典
+
+            获取新的xml的索引方式：
+                感觉得重新调整一下输出xml的格式，先分割面生成新的geo_out再transform，要不然很麻烦
+                
+                创建面节点（geo_convex）
+                创建基于原xml的标准图（）
+
+    """
+    def __init__(self):
+        """初始化一个空的有向图、空void、空面"""
+        self.graph = nx.DiGraph() 
+        self.face_graph = nx.Graph()
+        self.spaces = []
+        self.faces = []
+        self.positions = {}
+        self.fig = None
+        self.ax = None
+
+    def graph_representation(self, geo_path, xml_path):
+        """
+            Parse .xml and associated .geo files and build the ADSIM graph
+            Args:  
+                geo_path(str): *.geo file path
+                xml_path(str): *.xml file path
+            Returns:
+                graph
+        """
+        faces_id = []
+        faces_category =[]
+        faces_normal = []
+        faces_vertices = []
+
+        spaces_id = []
+        spaces_area = []
+        spaces_hegiht = []
+        spaces_boundary = []
+        
+        # 0.0   Initialize the read file
+        faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(geo_path)
+
+        root = read_xml(xml_path)
+
+        # 0.1   Create a dictionary mapping Uid and faceId
+        dict_u = {}
+
+        for elem in root.findall('face') + root.findall('wall') + root.findall('glazing'):
+            face_id = elem.find('faceId').text
+            uid = elem.find('Uid').text
+            
+            dict_u[face_id] = uid
+
+        # 1.1   Adding face nodes (FROM .geo)
+        for i in range(len(faces_id)):
+            face = {
+                'category': faces_category[i],
+                'id': faces_id[i],
+                'normal': np.array(faces_normal[i]),
+                'vertices': np.array(faces_vertices[i])
+            }
+
+            self.faces.append(face)
+            
+            obb_params = OBB.create_obb(np.array(faces_vertices[i]), np.array(faces_normal[i]))
+            
+            # OBB.plot_obb_and_points(face['vertices'], obb_params)
+            
+            face_params = {
+                "category": faces_category[i],
+                "vertices": faces_vertices[i],
+                "center": obb_params['center'],
+                "scale": obb_params['scale'],
+                "rotation": obb_params['rotation'],
+                "type": None, # floor, wall, roof
+                "heat_transfer": None,
+                "solar_heat_gain": None
+            }
+
+            self.graph.add_node(dict_u[faces_id[i]], face_params=face_params)
+            
+        
+
+        # 1.2   Adding face edges (FROM .xml)
+        for face in root.findall('face') + root.findall('wall') + root.findall('glazing'):
+            
+            uid = face.find('Uid').text
+            glazing_element = face.find('glazingId')
+            shading_element = face.find('shadingId')
+            
+            glazingid = glazing_element.text if glazing_element is not None else None
+            shadingid = shading_element.text if shading_element is not None else None
+
+            if glazingid is not None:
+                glazings = glazingid.split()
+                for glazing in glazings:
+                    # 如果邻接的 glazingid 不为空，则添加边
+                    self.graph.add_edge(uid, glazing, attr='glazing')
+                    self.graph.nodes[glazing]["type"] = "window"
+
+            if shadingid is not None:
+                shadings = shadingid.split()
+                for shading in shadings:
+                    # 如果邻接的 shadingid 不为空，则添加边
+                    self.graph.add_edge(uid, shading, attr='shading')
+                    self.graph.nodes[shading]["type"] = "shading"
+                    
+            neighbors = face.find('neighbor')
+
+            if neighbors is not None:
+                for edge in neighbors.findall('edge'):
+                    edge_keys = edge.text.split()
+                    for key in edge_keys:
+                        # 如果邻接的 faceId 不为空，则添加边
+                        self.graph.add_edge(uid, key)
+
+        # 2.1   Adding space nodes and Adding face-space edges
+        for space in root.findall('space'):
+            
+            space_id = space.find('id').text.strip() 
+            
+            space_area = space.find('area')
+            space_height = space.find('height')
+            space_boundary = space.find('boundary')
+
+            spaces_id.append(space_id)
+            spaces_area.append(space_area)
+            spaces_hegiht.append(space_height)
+            spaces_boundary.append(space_boundary)
+            #self.graph.add_node(space_id)  # 将 <id> 添加为图的节点
+
+            # 获取 <boundary> 中的所有 <pt> 坐标点，计算中点
+            if space_boundary is not None:
+                pts = space_boundary.findall('pt')
+                
+                coords = []
+                for pt in pts:
+                    x, y, z = map(float, pt.text.split())  # 将字符串转为浮点数坐标
+                    coords.append([x, y, z])
+                
+                if coords:
+                    coords = np.array(coords)
+                    center = coords.mean(axis=0)  # 计算中点
+                    self.positions[space_id] = center  # 存储空间的中心点坐标
+            
+
+            # 查找 <space> 节点下的所有 <neighbor> 节点，添加边
+            for neighbor in space.findall('neighbor'):
+                neighbor_id = neighbor.text.strip()  # 获取 <neighbor> 中的空间 ID
+                face_id = neighbor.attrib.get('Faceid')  # 获取 Faceid 属性
+                self.graph.add_edge(space_id, neighbor_id, Faceid=face_id)  # 添加边并附加 Faceid 属性
+
+    def draw_graph_3d(self):
+        """绘制图结构的三维表示"""
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # 为不同类型的节点使用不同颜色
+        colors = {
+            'window': 'blue',
+            'shading': 'green',
+            'floor': 'yellow',
+            'wall': 'red',
+            None: 'gray'  # 默认颜色
+        }
+        
+        # 绘制节点
+        for node in self.graph.nodes():
+            if 'face_params' in self.graph.nodes[node]:
+                center = self.graph.nodes[node]['face_params']['center']
+                print (center)
+                node_type = self.graph.nodes[node].get('type')
+                color = colors.get(node_type, 'red')
+                
+                # 绘制节点
+                ax.scatter(center[0], center[1], center[2], 
+                        c=color, s=50)
+                # 添加节点标签
+                ax.text(center[0], center[1], center[2], 
+                    str(node), size=8)
+        
+        # 绘制边
+        for edge in self.graph.edges():
+            start_node, end_node = edge
+            if ('face_params' in self.graph.nodes[start_node] and 
+                'face_params' in self.graph.nodes[end_node]):
+                
+                start_pos = self.graph.nodes[start_node]['face_params']['center']
+                end_pos = self.graph.nodes[end_node]['face_params']['center']
+                
+                # 获取边的属性
+                edge_attr = self.graph.edges[edge].get('attr', 'default')
+                edge_color = 'gray' if edge_attr == 'default' else 'orange'
+                
+                # 绘制边
+                ax.plot([start_pos[0], end_pos[0]],
+                    [start_pos[1], end_pos[1]],
+                    [start_pos[2], end_pos[2]],
+                    color=edge_color, linestyle='-', alpha=0.5)
+        
+        # 添加图例
+        legend_elements = [
+            plt.Line2D([0], [0], marker='o', color='w', 
+                    markerfacecolor=v, label=k if k else 'face', 
+                    markersize=8)
+            for k, v in colors.items()
+        ]
+        ax.legend(handles=legend_elements)
+        
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        plt.title('Building Graph 3D Visualization')
+        plt.show()
+
+    def get_nodes(self):
+        """获取图中的所有节点"""
+        return self.face_graph.nodes(data=True)
+
+    def get_edges(self):
+        """获取图中的所有边"""
+        return self.face_graph.edges(data=True)
+    
   
-    def graph_representation(self, geo_path):
+    def graph_representation_legacy(self, geo_path):
         
         # 为共享顶点分配唯一索引
         def assign_vertex_indices(faces_vertices):
@@ -457,31 +436,3 @@ class MoosasGraph:
                 if i != j and shared_vertices_by_index(face1, face2):
                     self.face_graph.add_edge(face1['id'], face2['id'])
 
-
-
-#main
-user_profile = os.environ['USERPROFILE']
-
-input_geo_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0_out.geo"   
-
-input_xml_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.xml" 
-
-output_geo_path = "data/selection0_convex.geo"
-
-
-def convex_temp():
-    
-    cat, idd, normal, faces, holes = read_geo(input_geo_path)
-    convex_cat, convex_idd, convex_normal, convex_faces = convexify.MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
-    write_geo (output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
-    
-
-
-def graph_temp():
-    graph = MoosasGraph()
-    graph.graph_representation_xml(output_geo_path, input_xml_path)  
-    graph.draw_graph_3d()
-
-
-convex_temp()
-#graph_temp()

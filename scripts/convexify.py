@@ -503,11 +503,6 @@ class MoosasConvexify:
         
         for idx, face in enumerate(faces):
             
-            convex_cat.append(cat[idx])
-            convex_idd.append(idd[idx])
-            convex_normal.append(normal[idx])
-            convex_faces.append(face)
-            
             is_upward = normal[idx][2] > 0
 
             if np.abs(normal[idx][2]) > 1e-3:  # wall判断
@@ -539,15 +534,19 @@ class MoosasConvexify:
                 else:
                     for i, subface in enumerate(subfaces):
                         convex_cat.append(cat[idx])
-                        convex_idd.append(f"{idd[idx]}_{i}")
+                        convex_idd.append(f"#{idd[idx]}")
                         convex_normal.append(normal[idx])
                         convex_faces.append(subface)
                     
                     if diags:
                         sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
                         divide_lines.extend(sublines)
-                    print (divide_lines)
 
+            else:
+                convex_cat.append(cat[idx])
+                convex_idd.append(idd[idx])
+                convex_normal.append(normal[idx])
+                convex_faces.append(face)
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         

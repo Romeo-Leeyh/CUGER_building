@@ -4,6 +4,7 @@
 import sys
 import os
 import numpy as np
+import xml.etree.ElementTree as ET
 
 def read_geo(file_path):
     """
@@ -114,3 +115,24 @@ def write_geo(file_path, cat, idd, normal, faces):
     
     except Exception as e:
         print(f"Error writing to file {file_path}: {e}")
+
+def read_xml(file_path):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    return root
+
+def write_adjson (file_path, data):
+    try:
+        with open(file_path, "w", encoding='utf-8') as f:
+            f.write(data)
+    except Exception as e:
+        print(f"Error writing to file {file_path}: {e}")
+
+def read_adjson (file_path):
+    try:
+        with open(file_path, "r", encoding='utf-8') as f:
+            data = f.read()
+            return data
+    except Exception as e:
+        print(f"Error reading file {file_path}: {e}")
+        return None

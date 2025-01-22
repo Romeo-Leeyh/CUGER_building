@@ -26,7 +26,7 @@ def convex_temp():
 
 def graph_temp():
     graph = MoosasGraph()
-    graph.graph_representation(output_geo_path, input_xml_path)  
+    graph.graph_representation(input_geo_path, input_xml_path)  
     graph.draw_graph_3d()
 
 

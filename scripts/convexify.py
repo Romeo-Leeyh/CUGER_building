@@ -487,7 +487,7 @@ class MoosasConvexify:
         MAIN FUNCTION FOR CONVEXIFY 非凸多边形优化主函数
         1. 读取cat分类、idd序号、normal 法线、faces面节点、holes洞节点
         2. 按照面中节点x+y+z的最小值重排节点起始点，按照法线方向归并所有多边形点序列为逆时针方向
-        3. 针对带洞多边形进行重整（未完成）
+        3. 针对带洞多边形进行重整(已完成)
         4. 多边形凸化，算法This divide-and-conquer methods base on Arkin, Ronald C.'s report (1987).
             "Path planning for a vision-based autonomous robot"
         5. 将凸化的分割线链接为四边形，并赋予新分类为空气墙
@@ -503,6 +503,11 @@ class MoosasConvexify:
         
         for idx, face in enumerate(faces):
             
+            convex_cat.append(cat[idx])
+            convex_idd.append(idd[idx])
+            convex_normal.append(normal[idx])
+            convex_faces.append(face)
+
             is_upward = normal[idx][2] > 0
 
             if np.abs(normal[idx][2]) > 1e-3:  # wall判断
@@ -542,11 +547,6 @@ class MoosasConvexify:
                         sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
                         divide_lines.extend(sublines)
 
-            else:
-                convex_cat.append(cat[idx])
-                convex_idd.append(idd[idx])
-                convex_normal.append(normal[idx])
-                convex_faces.append(face)
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         

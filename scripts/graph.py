@@ -192,12 +192,9 @@ class MoosasGraph:
 
         spaces_id = []
         spaces_area = []
-        spaces_hegiht = []
-        spaces_boundary = []
         
         # 0.0   Initialize the read file
         faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(geo_path)
-
         root = read_xml(xml_path)
 
         # 0.1   Create a dictionary mapping Uid and faceId
@@ -208,8 +205,8 @@ class MoosasGraph:
             uid = elem.find('Uid').text
             
             dict_u[face_id] = uid
-
-        # 1.1   Adding face nodes (FROM .geo)
+            
+        # 1 Adding face nodes (FROM .geo) and face edges (FROM .xml)
         for i in range(len(faces_id)):
             face = {
                 'category': faces_category[i],
@@ -235,11 +232,12 @@ class MoosasGraph:
                 "solar_heat_gain": None
             }
 
-            self.graph.add_node(dict_u[faces_id[i]], face_params=face_params)
-            
-        
+            if faces_id[i] in dict_u:
+                self.graph.add_node(dict_u[faces_id[i]], node_type="face", face_params=face_params)
+            else:
+                self.graph.add_node(f"0x#{faces_id[i]}", node_type="face", face_params=face_params)
+                self.graph.nodes[f"0x#{faces_id[i]}"]["face_params"]["type"] = "shading"
 
-        # 1.2   Adding face edges (FROM .xml)
         for face in root.findall('face') + root.findall('wall') + root.findall('glazing'):
             
             uid = face.find('Uid').text
@@ -252,16 +250,14 @@ class MoosasGraph:
             if glazingid is not None:
                 glazings = glazingid.split()
                 for glazing in glazings:
-                    # 如果邻接的 glazingid 不为空，则添加边
                     self.graph.add_edge(uid, glazing, attr='glazing')
-                    self.graph.nodes[glazing]["type"] = "window"
+                    self.graph.nodes[glazing]["face_params"]["type"] = "window"
 
             if shadingid is not None:
                 shadings = shadingid.split()
                 for shading in shadings:
-                    # 如果邻接的 shadingid 不为空，则添加边
                     self.graph.add_edge(uid, shading, attr='shading')
-                    self.graph.nodes[shading]["type"] = "shading"
+                    self.graph.nodes[shading]["face_params"]["type"] = "shading"
                     
             neighbors = face.find('neighbor')
 
@@ -269,44 +265,54 @@ class MoosasGraph:
                 for edge in neighbors.findall('edge'):
                     edge_keys = edge.text.split()
                     for key in edge_keys:
-                        # 如果邻接的 faceId 不为空，则添加边
                         self.graph.add_edge(uid, key)
 
-        # 2.1   Adding space nodes and Adding face-space edges
+        # 2  Adding space nodes and face-space edges
         for space in root.findall('space'):
             
             space_id = space.find('id').text.strip() 
-            
             space_area = space.find('area')
-            space_height = space.find('height')
-            space_boundary = space.find('boundary')
 
             spaces_id.append(space_id)
             spaces_area.append(space_area)
-            spaces_hegiht.append(space_height)
-            spaces_boundary.append(space_boundary)
-            #self.graph.add_node(space_id)  # 将 <id> 添加为图的节点
+                
+            self.graph.add_node(space_id, node_type="space") 
 
-            # 获取 <boundary> 中的所有 <pt> 坐标点，计算中点
-            if space_boundary is not None:
-                pts = space_boundary.findall('pt')
-                
-                coords = []
-                for pt in pts:
-                    x, y, z = map(float, pt.text.split())  # 将字符串转为浮点数坐标
-                    coords.append([x, y, z])
-                
-                if coords:
-                    coords = np.array(coords)
-                    center = coords.mean(axis=0)  # 计算中点
-                    self.positions[space_id] = center  # 存储空间的中心点坐标
+            # Find all <topology> nodes under the <space> node, add edges, and the surface attribute
+            topology = space.find('topology')
             
+            space_boundary_verts = []
 
-            # 查找 <space> 节点下的所有 <neighbor> 节点，添加边
-            for neighbor in space.findall('neighbor'):
-                neighbor_id = neighbor.text.strip()  # 获取 <neighbor> 中的空间 ID
-                face_id = neighbor.attrib.get('Faceid')  # 获取 Faceid 属性
-                self.graph.add_edge(space_id, neighbor_id, Faceid=face_id)  # 添加边并附加 Faceid 属性
+            if topology is not None:
+                floors = topology.find('floor/face')
+                if floors is not None:
+                    self.graph.nodes[floors.text]["face_params"]["type"] = "floor"
+                    self.graph.add_edge(space_id, floors.text, attr='floor')
+                    space_boundary_verts.append(self.graph.nodes[floors.text]["face_params"]["vertices"])
+                
+                ceilings = topology.find('ceiling/face')
+                if ceilings is not None:
+                    self.graph.nodes[ceilings.text]["face_params"]["type"] = "floor"
+                    self.graph.add_edge(space_id, ceilings.text, attr='ceiling')
+                    space_boundary_verts.append(self.graph.nodes[ceilings.text]["face_params"]["vertices"])
+
+                walls = topology.findall('edge/wall')
+                for wall in walls:
+                    wall_id = wall.find('Uid').text
+                    self.graph.nodes[wall_id]["face_params"]["type"] = "wall"
+                    self.graph.add_edge(space_id, wall_id, attr='wall')
+                    space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["vertices"])
+
+            obb_params = OBB.create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
+            OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
+            space_params = {
+                "center": obb_params['center'],
+                "scale": obb_params['scale'],
+                "rotation": obb_params['rotation'],
+                "area": space_area.text
+            }
+
+            self.graph.nodes[space_id]["space_params"] = space_params
 
     def draw_graph_3d(self):
         """绘制图结构的三维表示"""
@@ -326,16 +332,20 @@ class MoosasGraph:
         for node in self.graph.nodes():
             if 'face_params' in self.graph.nodes[node]:
                 center = self.graph.nodes[node]['face_params']['center']
-                print (center)
-                node_type = self.graph.nodes[node].get('type')
+                
+                node_type = self.graph.nodes[node]['face_params']['type']
+
                 color = colors.get(node_type, 'red')
                 
-                # 绘制节点
                 ax.scatter(center[0], center[1], center[2], 
                         c=color, s=50)
-                # 添加节点标签
-                ax.text(center[0], center[1], center[2], 
-                    str(node), size=8)
+
+            if 'space_params' in self.graph.nodes[node]:
+                center = self.graph.nodes[node]['space_params']['center']
+                
+                ax.scatter(center[0], center[1], center[2], 
+                        c='red', s=100)
+
         
         # 绘制边
         for edge in self.graph.edges():
@@ -355,7 +365,23 @@ class MoosasGraph:
                     [start_pos[1], end_pos[1]],
                     [start_pos[2], end_pos[2]],
                     color=edge_color, linestyle='-', alpha=0.5)
-        
+
+            if ('space_params' in self.graph.nodes[start_node] and 
+                'space_params' in self.graph.nodes[end_node]):
+                
+                start_pos = self.graph.nodes[start_node]['space_params']['center']
+                end_pos = self.graph.nodes[end_node]['space_params']['center']
+                
+                # 获取边的属性
+                edge_attr = self.graph.edges[edge].get('attr', 'default')
+                edge_color = 'gray' if edge_attr == 'default' else 'orange'
+                
+                # 绘制边
+                ax.plot([start_pos[0], end_pos[0]],
+                    [start_pos[1], end_pos[1]],
+                    [start_pos[2], end_pos[2]],
+                    color=edge_color, linestyle='-', alpha=0.5)
+                    
         # 添加图例
         legend_elements = [
             plt.Line2D([0], [0], marker='o', color='w', 

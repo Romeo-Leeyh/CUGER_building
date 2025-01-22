@@ -325,6 +325,7 @@ class MoosasGraph:
             'shading': 'yellowgreen',
             'floor': 'sandybrown',
             'wall': 'mediumpurple',
+            'airwall': 'lightcoral',
             None: 'gray'  
         }
         

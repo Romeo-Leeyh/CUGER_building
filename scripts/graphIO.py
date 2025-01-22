@@ -5,6 +5,9 @@ import sys
 import os
 import numpy as np
 import xml.etree.ElementTree as ET
+import json
+import networkx as nx
+from pathlib import Path
 
 def read_geo(file_path):
     """
@@ -136,3 +139,50 @@ def read_adjson (file_path):
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return None
+
+class NumpyEncoder(json.JSONEncoder):
+    """处理 numpy 数组的 JSON 编码器"""
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.float32):
+            return float(obj)
+        if isinstance(obj, np.int64):
+            return int(obj)
+        return super().default(obj)
+
+def graph_to_json(graph, output_dir):
+    """导出图数据到JSON文件"""
+    # 准备节点数据
+    nodes_data = {}
+    for node_id, node_attrs in graph.graph.nodes(data=True):
+        # 深拷贝并转换所有numpy数据
+        node_data = {}
+        for key, value in node_attrs.items():
+            if isinstance(value, dict):
+                node_data[key] = {k: v.tolist() if isinstance(v, np.ndarray) else v 
+                                 for k, v in value.items()}
+            else:
+                node_data[key] = value.tolist() if isinstance(value, np.ndarray) else value
+        nodes_data[str(node_id)] = node_data
+    
+    # 准备边数据
+    edges_data = {}
+    for u, v, edge_attrs in graph.graph.edges(data=True):
+        edge_id = f"{u}_{v}"
+        edges_data[edge_id] = {
+            "source": str(u),
+            "target": str(v),
+            "attributes": edge_attrs
+        }
+    
+    # 确保输出目录存在
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # 写入文件
+    with open(output_path / "nodes.json", "w", encoding="utf-8") as f:
+        json.dump(nodes_data, f, indent=4, cls=NumpyEncoder)
+    
+    with open(output_path / "edges.json", "w", encoding="utf-8") as f:
+        json.dump(edges_data, f, indent=4, cls=NumpyEncoder)

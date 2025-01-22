@@ -156,7 +156,7 @@ class MoosasGraph:
 
         边表征参数：
             space-face：方向；面属性（floor wall roof）
-            face-face：关系（相接、附着、属于                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ）
+            face-face：关系（相接、附着、属于   ）
         需要调整的地方：
             geo_out编号与xml一一对应，所以在重新生成geo后的编号也要调整，需要建立一个geo_out与geo_convex之间的索引字典
 
@@ -170,7 +170,6 @@ class MoosasGraph:
     def __init__(self):
         """初始化一个空的有向图、空void、空面"""
         self.graph = nx.DiGraph() 
-        self.face_graph = nx.Graph()
         self.spaces = []
         self.faces = []
         self.positions = {}
@@ -411,13 +410,13 @@ class MoosasGraph:
         plt.title('Building Graph 3D Visualization')
         plt.show()
 
-    def get_nodes(self):
+    def nodes(self):
         """获取图中的所有节点"""
-        return self.face_graph.nodes(data=True)
+        return self.graph.nodes(data=True)
 
-    def get_edges(self):
+    def edges(self):
         """获取图中的所有边"""
-        return self.face_graph.edges(data=True)
+        return self.graph.edges(data=True)
     
   
     def graph_representation_legacy(self, geo_path):

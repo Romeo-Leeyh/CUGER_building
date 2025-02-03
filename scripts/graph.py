@@ -195,17 +195,16 @@ class MoosasGraph:
         faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(geo_path)
         root = read_xml(xml_path)
 
-        # 0.1   Create a dictionary mapping Uid and faceId
+        # 1   Create a dictionary mapping Uid and faceId, Adding face nodes (FROM .geo) and face edges (FROM .xml)
         dict_u = {}
 
         for elem in root.findall('face') + root.findall('wall') + root.findall('glazing'):
             face_id = elem.find('faceId').text
             uid = elem.find('Uid').text
             
-            dict_u[face_id] = uid
-            
-        # 1 Adding face nodes (FROM .geo) and face edges (FROM .xml)
-        for i in range(len(faces_id)):
+            dict_u[uid] = [face_id]
+            i = faces_id.index(face_id)
+
             face = {
                 'category': faces_category[i],
                 'id': faces_id[i],
@@ -220,8 +219,7 @@ class MoosasGraph:
             # OBB.plot_obb_and_points(face['vertices'], obb_params)
             
             face_params = {
-                "category": faces_category[i],
-                "vertices": faces_vertices[i],
+                "vertices": face['vertices'],
                 "center": obb_params['center'],
                 "scale": obb_params['scale'],
                 "rotation": obb_params['rotation'],
@@ -230,11 +228,10 @@ class MoosasGraph:
                 "solar_heat_gain": None
             }
 
-            if faces_id[i] in dict_u:
-                self.graph.add_node(dict_u[faces_id[i]], node_type="face", face_params=face_params)
-            else:
-                self.graph.add_node(f"0x#{faces_id[i]}", node_type="face", face_params=face_params)
-                self.graph.nodes[f"0x#{faces_id[i]}"]["face_params"]["type"] = "shading"
+            if faces_category[i] == '2':
+                face_params["type"] = "airwall"
+
+            self.graph.add_node(uid, node_type="face", face_params=face_params)
 
         for face in root.findall('face') + root.findall('wall') + root.findall('glazing'):
             
@@ -246,10 +243,15 @@ class MoosasGraph:
             shadingid = shading_element.text if shading_element is not None else None
 
             if glazingid is not None:
+
                 glazings = glazingid.split()
                 for glazing in glazings:
-                    self.graph.add_edge(uid, glazing, attr='glazing')
-                    self.graph.nodes[glazing]["face_params"]["type"] = "window"
+                    face_id = face.find('faceId').text
+                    if faces_category[faces_id.index(face_id)] == '2': 
+                        continue
+                    else:
+                        self.graph.add_edge(uid, glazing, attr='glazing')
+                        self.graph.nodes[glazing]["face_params"]["type"] = "window"
 
             if shadingid is not None:
                 shadings = shadingid.split()
@@ -273,8 +275,12 @@ class MoosasGraph:
 
             spaces_id.append(space_id)
             spaces_area.append(space_area)
-                
-            self.graph.add_node(space_id, node_type="space") 
+
+            if space.find('is_void').text == 'False':  
+                self.graph.add_node(space_id, node_type="space") 
+            else:
+                self.graph.add_node(space_id, node_type="void")
+ 
 
             # Find all <topology> nodes under the <space> node, add edges, and the surface attribute
             topology = space.find('topology')
@@ -316,16 +322,19 @@ class MoosasGraph:
 
     def draw_graph_3d(self):
         """绘制图结构的三维表示"""
-        fig = plt.figure(figsize=(12, 8))
+        fig = plt.figure(figsize=(6, 6))
         ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(elev=15, azim=15)  # 设置仰角为30度，方位角为45度
         
         colors = {
-            'window': 'skyblue',
-            'shading': 'yellowgreen',
-            'floor': 'sandybrown',
-            'wall': 'mediumpurple',
-            'airwall': 'lightcoral',
-            None: 'gray'  
+            'window': '#FFBE7A',
+            'shading': '#999999',
+            'floor': '#82B0D2',
+            'wall': '#8ECFC9',
+            'airwall': '#E7DAD2',
+            'space': '#FA7F6F',
+            'void': 'white',
+            None: 'white'  
         }
         
         # 绘制节点
@@ -338,13 +347,16 @@ class MoosasGraph:
                 color = colors.get(node_type, 'brown')
                 
                 ax.scatter(center[0], center[1], center[2], 
-                        c=color, s=50)
+                        c=color, s=50, edgecolors='k')
 
             if 'space_params' in self.graph.nodes[node]:
                 center = self.graph.nodes[node]['space_params']['center']
-                
+                if self.graph.nodes[node]['node_type'] == 'void':
+                    color = colors['void']
+                else:
+                    color = colors['space']
                 ax.scatter(center[0], center[1], center[2], 
-                        c='brown', s=100)
+                        c=color, s=100, edgecolors='k')
 
         
         # 绘制边
@@ -358,7 +370,7 @@ class MoosasGraph:
 
                 # 获取边的属性
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
-                edge_color = 'pink' if edge_attr == 'default' else 'orange'
+                edge_color = '#999999' if edge_attr == 'default' else 'orange'
                 
                 # 绘制边
                 ax.plot([start_pos[0], end_pos[0]],
@@ -383,6 +395,8 @@ class MoosasGraph:
                     color=edge_color, linestyle='--', alpha=0.5)
                     
         # 添加图例
+             
+        
         legend_elements = [
             plt.Line2D([0], [0], marker='o', color='w', 
                     markerfacecolor=v, label=k if k else 'face', 
@@ -391,23 +405,9 @@ class MoosasGraph:
         ]
         ax.legend(handles=legend_elements)
         
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-
-        ax.xaxis.pane.fill = False
-        ax.yaxis.pane.fill = False
-        ax.zaxis.pane.fill = False
-        
-        # 调整网格线
-        ax.grid(True, alpha=0.3)
-        
-        # 调整坐标轴颜色为浅灰色
-        grey_color = '#666666'
-        ax.xaxis.line.set_color(grey_color)
-        ax.yaxis.line.set_color(grey_color)
-        ax.zaxis.line.set_color(grey_color)
-        plt.title('Building Graph 3D Visualization')
+        plt.axis('off')
+        ax.set_axis_off()
+        #plt.title('Building Graph 3D Visualization')
         plt.show()
 
     def nodes(self):

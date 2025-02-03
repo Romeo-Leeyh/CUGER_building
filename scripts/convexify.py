@@ -502,11 +502,6 @@ class MoosasConvexify:
         divide_lines = []
         
         for idx, face in enumerate(faces):
-            
-            convex_cat.append(cat[idx])
-            convex_idd.append(idd[idx])
-            convex_normal.append(normal[idx])
-            convex_faces.append(face)
 
             is_upward = normal[idx][2] > 0
 
@@ -535,11 +530,15 @@ class MoosasConvexify:
                 subfaces = [verts[poly] for poly in polys]
                 
                 if len(subfaces) == 1:
-                    continue
+                    for i, subface in enumerate(subfaces):
+                        convex_cat.append(cat[idx])
+                        convex_idd.append(idd[idx])
+                        convex_normal.append(normal[idx])
+                        convex_faces.append(subface)
                 else:
                     for i, subface in enumerate(subfaces):
                         convex_cat.append(cat[idx])
-                        convex_idd.append(f"#{idd[idx]}")
+                        convex_idd.append(f"#{idd[idx]}_{i}")
                         convex_normal.append(normal[idx])
                         convex_faces.append(subface)
                     
@@ -547,6 +546,11 @@ class MoosasConvexify:
                         sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
                         divide_lines.extend(sublines)
 
+            else:
+                convex_cat.append(cat[idx])
+                convex_idd.append(idd[idx])
+                convex_normal.append(normal[idx])
+                convex_faces.append(face)
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         

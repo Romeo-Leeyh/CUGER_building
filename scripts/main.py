@@ -35,13 +35,13 @@ def convex_temp(input_geo_path, output_geo_path):
     
 
 
-def graph_temp():
+def graph_temp(new_geo_path, new_xml_path):
     graph = MoosasGraph()
     graph.graph_representation(new_geo_path, new_xml_path)  
     graph.draw_graph_3d()
     
     graph_to_json(graph, output_json_path)
 
-convex_temp(input, output_geo_path)
+convex_temp(input_geo_path, output_geo_path)
 Moosas.transform(output_geo_path, new_xml_path, new_geo_path, divided_zones=False)
-graph_temp()
+graph_temp(new_geo_path, new_xml_path)

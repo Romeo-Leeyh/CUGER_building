@@ -198,7 +198,7 @@ class MoosasGraph:
         # 1   Create a dictionary mapping Uid and faceId, Adding face nodes (FROM .geo) and face edges (FROM .xml)
         dict_u = {}
 
-        for elem in root.findall('face') + root.findall('wall') + root.findall('glazing'):
+        for elem in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
             face_id = elem.find('faceId').text
             uid = elem.find('Uid').text
             
@@ -250,8 +250,15 @@ class MoosasGraph:
                     if faces_category[faces_id.index(face_id)] == '2': 
                         continue
                     else:
-                        self.graph.add_edge(uid, glazing, attr='glazing')
-                        self.graph.nodes[glazing]["face_params"]["type"] = "window"
+                        if glazing in self.graph.nodes:
+                            if "face_params" in self.graph.nodes[glazing]:
+                
+                                self.graph.add_edge(uid, glazing, attr='glazing')
+                                self.graph.nodes[glazing]["face_params"]["type"] = "window"
+                            else:
+                                print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                        else:
+                                print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
 
             if shadingid is not None:
                 shadings = shadingid.split()

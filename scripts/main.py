@@ -44,7 +44,7 @@ def convex_temp(input_geo_path, output_geo_path):
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
     convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
-    MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=f"{figure_path}convex_faces.png")
+    #MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=f"{figure_path}convex_faces.png")
     F, E, V = MoosasConvexify.calculate(convex_faces)
     print(f"Number of faces: {F}, Number of edges: {E}, Number of vertices: {V}, Euler number: {V - E + F}")
 
@@ -58,7 +58,7 @@ def process_file(input_geo_path, modelname):
 
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
-    """    
+        
     try:
         convex_temp(input_geo_path, paths["output_geo_path"])
         Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False)
@@ -69,11 +69,12 @@ def process_file(input_geo_path, modelname):
         print(f"FileNotFoundError: {e} - Modelname: {modelname}")
     except Exception as e:
         print(f"Unexpected error: {e} - Modelname: {modelname}")
-        """
     
+    """
     convex_temp(input_geo_path, paths["output_geo_path"])
-    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False)
+    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False, stdout=None)
     graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    """
     
 # 遍历文件夹，处理所有 .geo 文件
 def process_geo_files(input_dir):
@@ -85,10 +86,6 @@ def process_geo_files(input_dir):
                 basename = os.path.splitext(relative_path)[0].replace('\\', '_')
                 process_file(input_geo_path, basename)
 
-                break
-        else:
-            continue
-        break
 
 # 执行处理
 process_geo_files(input)

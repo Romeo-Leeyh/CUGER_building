@@ -402,39 +402,7 @@ class Geometry_Option:
         
         return polygons
 
-class MoosasConvexify:
-    def plot_faces(faces, lines):
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
-
-        for face in faces:
-            x, y, z = face[:, 0], face[:, 1], face[:, 2]
-
-            x = np.append(x, x[0])
-            y = np.append(y, y[0])
-            z = np.append(z, z[0])    
-
-            ax.plot(x, y, z, 'purple')  # 绘制多边形的边
-            ax.scatter(x, y, z, c='black', marker='o', s=20)
-
-        for line in lines:
-            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
-
-            ax.plot(x, y, z, 'blue')  # 绘制多边形的边
-
-
-        # 设置坐标轴刻度相同
-        max_range = np.array([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()]).max() / 2.0
-        mid_x = (x.max()+x.min()) * 0.5
-        mid_y = (y.max()+y.min()) * 0.5
-        mid_z = (z.max()+z.min()) * 0.5
-        ax.set_xlim(mid_x - 5 * max_range, mid_x + 5 * max_range)
-        ax.set_ylim(mid_y - 5 * max_range, mid_y + 5 * max_range)
-        ax.set_zlim(mid_z - 2 * max_range, mid_z + 2 * max_range)
-        
-        plt.show()
-
-    
+class MoosasConvexify:  
 
     def create_quadrilaterals(divide_lines):
         line_groups = defaultdict(list)
@@ -559,11 +527,56 @@ class MoosasConvexify:
             convex_idd.append(f"a_{i}")
             convex_normal.append(quad_normals[i])
             convex_faces.append(face)
+
+        return convex_cat, convex_idd, convex_normal, convex_faces, divide_lines
+
+    def calculate (faces):
+        edges = set()
+        nodes = set()
+
+        # 遍历所有面
+        for face in faces:
+            # 遍历面中的每条边
+            for i in range(len(face)):
+                edge = (tuple(face[i].tolist()), tuple(face[(i + 1) % len(face)].tolist()))  # 确保边是元组
+                edge = tuple(sorted(edge))  # 确保每条边是唯一的（无向边）
+                edges.add(edge)
+            
+            # 将所有节点添加到集合中
+            for node in face:
+                nodes.add(tuple(node.tolist()))  # 将节点转换为元组，确保唯一性
         
+        return len(faces), len(edges), len(nodes)
 
-        # Plotting convexified faces
-        MoosasConvexify.plot_faces(convex_faces, divide_lines)
+    def plot_faces(faces, lines, file_path):
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection='3d')
 
-        return convex_cat, convex_idd, convex_normal, convex_faces
+        for face in faces:
+            x, y, z = face[:, 0], face[:, 1], face[:, 2]
+
+            x = np.append(x, x[0])
+            y = np.append(y, y[0])
+            z = np.append(z, z[0])    
+
+            ax.plot(x, y, z, 'purple')  # 绘制多边形的边
+            ax.scatter(x, y, z, c='black', marker='o', s=20)
+
+        for line in lines:
+            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
+
+            ax.plot(x, y, z, 'blue')  # 绘制多边形的边
 
 
+        # 设置坐标轴刻度相同
+        max_range = np.array([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()]).max() / 2.0
+        mid_x = (x.max()+x.min()) * 0.5
+        mid_y = (y.max()+y.min()) * 0.5
+        mid_z = (z.max()+z.min()) * 0.5
+        ax.set_xlim(mid_x - 5 * max_range, mid_x + 5 * max_range)
+        ax.set_ylim(mid_y - 5 * max_range, mid_y + 5 * max_range)
+        ax.set_zlim(mid_z - 2 * max_range, mid_z + 2 * max_range)
+        plt.axis('off')
+        ax.set_axis_off()
+        
+        plt.savefig(file_path)

@@ -14,9 +14,12 @@ import moosas.python.Lib.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "D:/DATA/_cleaned/118/04504/04504-01.geo"
+input = "E:/DATA/Moosasbuildingdatasets/_cleaned"
+output = "E:/DATA/Moosasbuildingdatasets/"
+figure_path = "E:/DATA/Moosasbuildingdatasets/figure/"
 
 
+"""
 input_geo_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.geo"   
 
 input_xml_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.xml" 
@@ -27,21 +30,66 @@ output_json_path = "BuildingConvex/data/adjson"
 
 new_geo_path = "BuildingConvex/data/selection0_new.geo"
 new_xml_path = "BuildingConvex/data/selection0_new.xml"
+"""
+
+def get_output_paths(modelname):
+    return {
+        "output_geo_path": os.path.join(output, "geo", f"{modelname}.geo"),
+        "output_json_path": os.path.join(output, "graph", f"{modelname}.json"),
+        "new_xml_path": os.path.join(output, "new_xml", f"{modelname}.xml"),
+        "new_geo_path": os.path.join(output, "new_geo", f"{modelname}.geo")
+    }
 
 def convex_temp(input_geo_path, output_geo_path):
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
-    convex_cat, convex_idd, convex_normal, convex_faces = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
-    write_geo (output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
-    
+    convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
+    write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
+    MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=f"{figure_path}convex_faces.png")
+    F, E, V = MoosasConvexify.calculate(convex_faces)
+    print(f"Number of faces: {F}, Number of edges: {E}, Number of vertices: {V}, Euler number: {V - E + F}")
 
-
-def graph_temp(new_geo_path, new_xml_path):
+def graph_temp(new_geo_path, new_xml_path, output_json_path):
     graph = MoosasGraph()
     graph.graph_representation(new_geo_path, new_xml_path)  
-    graph.draw_graph_3d()
-    
     graph_to_json(graph, output_json_path)
 
-convex_temp(input_geo_path, output_geo_path)
-Moosas.transform(output_geo_path, new_xml_path, new_geo_path, divided_zones=False)
-graph_temp(new_geo_path, new_xml_path)
+def process_file(input_geo_path, modelname):
+    paths = get_output_paths(modelname)
+
+    print(f"Processing file: {input_geo_path}, basename: {modelname}")
+    
+    """    
+    try:
+        convex_temp(input_geo_path, paths["output_geo_path"])
+        Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False)
+        graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    except ValueError as e:
+        print(f"ValueError: {e} - Modelname: {modelname}")
+    except FileNotFoundError as e:
+        print(f"FileNotFoundError: {e} - Modelname: {modelname}")
+    except Exception as e:
+        print(f"Unexpected error: {e} - Modelname: {modelname}")
+        """
+    
+    convex_temp(input_geo_path, paths["output_geo_path"])
+    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False)
+    graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    
+# 遍历文件夹，处理所有 .geo 文件
+def process_geo_files(input_dir):
+    for dirpath, dirnames, filenames in os.walk(input_dir):
+        for filename in filenames:
+            if filename.endswith('.geo'):
+                input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
+                relative_path = os.path.relpath(input_geo_path, input_dir)
+                basename = os.path.splitext(relative_path)[0].replace('\\', '_')
+                process_file(input_geo_path, basename)
+
+                break
+        else:
+            continue
+        break
+
+# 执行处理
+process_geo_files(input)
+

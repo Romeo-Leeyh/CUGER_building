@@ -47,32 +47,44 @@ class OBB:
             obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
 
             # 计算边向量
-            x_vec = obb_coords[1] - obb_coords[0]
-            y_vec = obb_coords[3] - obb_coords[0]
-            
-            # 计算范数
-            x_norm = np.linalg.norm(x_vec)
-            y_norm = np.linalg.norm(y_vec)
-            
-            # 检查范数并计算单位向量
-            if x_norm > 1e-6:
-                x_r = x_vec / x_norm
+            if len(obb_coords) <= 2:
+                centroid = np.mean(points, axis=0)
+                x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
+                rotation = np.array([x_r, y_r, z_r])
+                rotation_matrix = R.from_matrix(rotation).as_matrix()
+                l = max(np.ptp(points[:, 0]), min_scale)
+                w = max(np.ptp(points[:, 1]), min_scale)
+                h = max(np.ptp(points[:, 2]), min_scale)
+        
+                original_obb_centroid = centroid
+
             else:
-                x_r = np.array([1, 0, 0])  # 默认x方向
+                x_vec = obb_coords[1] - obb_coords[0]
+                y_vec = obb_coords[3] - obb_coords[0]
+            
+                # 计算范数
+                x_norm = np.linalg.norm(x_vec)
+                y_norm = np.linalg.norm(y_vec)
                 
-            if y_norm > 1e-6:
-                y_r = y_vec / y_norm
-            else:
-                y_r = np.array([0, 1, 0])  # 默认y方向
+                # 检查范数并计算单位向量
+                if x_norm > 1e-6:
+                    x_r = x_vec / x_norm
+                else:
+                    x_r = np.array([1, 0, 0])  # 默认x方向
+                    
+                if y_norm > 1e-6:
+                    y_r = y_vec / y_norm
+                else:
+                    y_r = np.array([0, 1, 0])  # 默认y方向
 
-            rotation = np.array([x_r, y_r, z_r])
-            rotation_matrix = R.from_matrix(rotation).as_matrix()
+                rotation = np.array([x_r, y_r, z_r])
+                rotation_matrix = R.from_matrix(rotation).as_matrix()
 
-            l = np.linalg.norm(obb_coords[1] - obb_coords[0])
-            w = np.linalg.norm(obb_coords[3] - obb_coords[0])
-            h = max(np.max(points[:, 2])-np.min(points[:, 2]), min_scale) 
+                l = np.linalg.norm(obb_coords[1] - obb_coords[0])
+                w = np.linalg.norm(obb_coords[3] - obb_coords[0])
+                h = max(np.max(points[:, 2])-np.min(points[:, 2]), min_scale) 
 
-            original_obb_centroid = np.mean(obb_coords, axis=0)
+                original_obb_centroid = np.mean(obb_coords, axis=0)
             
         else:
             x_r = np.cross(z_r, z_axis)
@@ -203,7 +215,11 @@ class MoosasGraph:
             uid = elem.find('Uid').text
             
             dict_u[uid] = [face_id]
-            i = faces_id.index(face_id)
+            if face_id in faces_id:
+                i = faces_id.index(face_id)
+            else:
+                print(f"Skipping edge addition: Face '{face_id}' does not exist.")
+                continue
 
             face = {
                 'category': faces_category[i],
@@ -247,19 +263,22 @@ class MoosasGraph:
                 glazings = glazingid.split()
                 for glazing in glazings:
                     face_id = face.find('faceId').text
-                    if faces_category[faces_id.index(face_id)] == '2': 
-                        continue
-                    else:
-                        if glazing in self.graph.nodes:
-                            if "face_params" in self.graph.nodes[glazing]:
-                
-                                self.graph.add_edge(uid, glazing, attr='glazing')
-                                self.graph.nodes[glazing]["face_params"]["type"] = "window"
-                            else:
-                                print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                    if face_id in faces_id:
+                        if faces_category[faces_id.index(face_id)] == '2': 
+                            continue
                         else:
-                                print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
-
+                            if glazing in self.graph.nodes:
+                                if "face_params" in self.graph.nodes[glazing]:
+                    
+                                    self.graph.add_edge(uid, glazing, attr='glazing')
+                                    self.graph.nodes[glazing]["face_params"]["type"] = "window"
+                                else:
+                                    print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                            else:
+                                    print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
+                    else:
+                        print(f"Skipping edge addition: Face '{face_id}' does not exist.")
+                        continue
             if shadingid is not None:
                 shadings = shadingid.split()
                 for shading in shadings:
@@ -297,22 +316,33 @@ class MoosasGraph:
             if topology is not None:
                 floors = topology.find('floor/face')
                 if floors is not None:
-                    self.graph.nodes[floors.text]["face_params"]["type"] = "floor"
-                    self.graph.add_edge(space_id, floors.text, attr='floor')
-                    space_boundary_verts.append(self.graph.nodes[floors.text]["face_params"]["vertices"])
-                
+                    floors_id = floors.text
+                    if floors_id in self.graph.nodes:
+                        self.graph.nodes[floors_id]["face_params"]["type"] = "floor"
+                        self.graph.add_edge(space_id, floors_id, attr='floor')
+                        space_boundary_verts.append(self.graph.nodes[floors_id]["face_params"]["vertices"])
+                    else:
+                        print(f"Skipping edge addition: Node  '{floors_id}' does not exist.")
+
                 ceilings = topology.find('ceiling/face')
                 if ceilings is not None:
-                    self.graph.nodes[ceilings.text]["face_params"]["type"] = "floor"
-                    self.graph.add_edge(space_id, ceilings.text, attr='ceiling')
-                    space_boundary_verts.append(self.graph.nodes[ceilings.text]["face_params"]["vertices"])
+                    ceilings_id = ceilings.text
+                    if ceilings_id in self.graph.nodes:
+                        self.graph.nodes[ceilings_id]["face_params"]["type"] = "floor"
+                        self.graph.add_edge(space_id, ceilings_id, attr='ceiling')
+                        space_boundary_verts.append(self.graph.nodes[ceilings_id]["face_params"]["vertices"])
+                    else:
+                        print(f"Skipping edge addition: Node  '{ceilings_id}' does not exist.")
 
                 walls = topology.findall('edge/wall')
                 for wall in walls:
                     wall_id = wall.find('Uid').text
-                    self.graph.nodes[wall_id]["face_params"]["type"] = "wall"
-                    self.graph.add_edge(space_id, wall_id, attr='wall')
-                    space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["vertices"])
+                    if wall_id in self.graph.nodes:
+                        self.graph.nodes[wall_id]["face_params"]["type"] = "wall"
+                        self.graph.add_edge(space_id, wall_id, attr='wall')
+                        space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["vertices"])
+                    else:
+                        print(f"Skipping edge addition: Node  '{wall_id}' does not exist.")
 
             obb_params = OBB.create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
             #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
@@ -327,7 +357,7 @@ class MoosasGraph:
             self.graph.nodes[space_id]["space_params"] = space_params
 
 
-    def draw_graph_3d(self):
+    def draw_graph_3d(self, file_path):
         """绘制图结构的三维表示"""
         fig = plt.figure(figsize=(6, 6))
         ax = fig.add_subplot(111, projection='3d')
@@ -410,12 +440,14 @@ class MoosasGraph:
                     markersize=8)
             for k, v in colors.items()
         ]
-        ax.legend(handles=legend_elements)
+        #ax.legend(handles=legend_elements)
         
         plt.axis('off')
         ax.set_axis_off()
         #plt.title('Building Graph 3D Visualization')
-        plt.show()
+        #plt.show()
+        plt.savefig(file_path)
+        plt.close()
 
     def nodes(self):
         """获取图中的所有节点"""

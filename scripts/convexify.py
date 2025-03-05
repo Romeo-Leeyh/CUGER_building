@@ -312,9 +312,7 @@ class Geometry_Option:
             ia_prev, ia_next = (ia - 1) % n, (ia + 1) % n
             angle = BasicOptions.angle(verts[indices[ia_prev]], verts[indices[ia]], verts[indices[ia_next]])
             
-            if angle > 0:
-                pass
-            else:
+            if angle < 0:
                 i_concave = ia
                 break
 
@@ -369,6 +367,18 @@ class Geometry_Option:
             ret_diag.append(((diag[0] + i_break) % n, (diag[1] + i_break) % n))
 
         result_indices = i1 + i2
+        """
+        for new_indices in [indices1, indices2]:
+            count = 0
+            for ia in range(len(new_indices)):
+                ia_prev, ia_next = (ia - 1) % n, (ia + 1) % n
+                angle = BasicOptions.angle(verts[indices[ia_prev]], verts[indices[ia]], verts[indices[ia_next]])
+                if angle > 0:
+                    count += 1
+            
+            if count > 4:    
+                return Geometry_Option.split_poly(verts, new_indices)
+        """
 
         return result_indices, ret_diag
 
@@ -462,7 +472,15 @@ class MoosasConvexify:
         7. 生成新面与旧面的索引关系字典
         6. 输出合并后的cat分类、idd序号、normal 法线、faces面节点
         """
-        
+        """
+        还是有一些细节需要讨论：是否应该针对180°的角进行分割？
+        应该分割的情况：房间与房间相对，即最短连线尽可能垂直，且与上一个点的间距不能太小
+        不应该分割的情况：房间与大空间相对，或者最短的连线无法垂直或与前序线的夹角很小，或者与上一个点的间距很小
+
+        另外，确实需要明确分割后的面边数，在计算边数时，应该按照只有角度在179°以上的才能算作一个角点，否则不计入，这样可以避免绝大多数面都被分成了三角形
+        """
+
+
         convex_cat = []
         convex_idd = []
         convex_normal = []
@@ -551,6 +569,7 @@ class MoosasConvexify:
     def plot_faces(faces, lines, file_path):
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(elev=15, azim=15)
 
         for face in faces:
             x, y, z = face[:, 0], face[:, 1], face[:, 2]
@@ -561,22 +580,18 @@ class MoosasConvexify:
 
             ax.plot(x, y, z, 'purple')  # 绘制多边形的边
             ax.scatter(x, y, z, c='black', marker='o', s=20)
+         
+        if lines:
+            for line in lines:
+                x, y, z = line[:, 0], line[:, 1], line[:, 2] 
 
-        for line in lines:
-            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
-
-            ax.plot(x, y, z, 'blue')  # 绘制多边形的边
+                ax.plot(x, y, z, 'blue')  # 绘制多边形的边
 
 
         # 设置坐标轴刻度相同
-        max_range = np.array([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()]).max() / 2.0
-        mid_x = (x.max()+x.min()) * 0.5
-        mid_y = (y.max()+y.min()) * 0.5
-        mid_z = (z.max()+z.min()) * 0.5
-        ax.set_xlim(mid_x - 5 * max_range, mid_x + 5 * max_range)
-        ax.set_ylim(mid_y - 5 * max_range, mid_y + 5 * max_range)
-        ax.set_zlim(mid_z - 2 * max_range, mid_z + 2 * max_range)
+
         plt.axis('off')
         ax.set_axis_off()
-        
+        #plt.show()
         plt.savefig(file_path)
+        plt.close()

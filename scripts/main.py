@@ -57,9 +57,10 @@ def graph_temp(new_geo_path, new_xml_path, output_json_path):
 
 def process_file(input_geo_path, modelname):
     paths = get_output_paths(modelname)
-    if os.path.exists(paths["output_json_path"]):
+    
+    if os.path.exists(paths["output_geo_path"]):
         print(f"--Skip-- | {modelname}")
-        return
+        #return
     
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
@@ -77,7 +78,7 @@ def process_file(input_geo_path, modelname):
     
     """
     convex_temp(input_geo_path, paths["output_geo_path"])
-    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False, stdout=None, standardize=True)
+    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
     #graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
      
     

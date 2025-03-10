@@ -186,3 +186,48 @@ def graph_to_json(graph, output_dir):
     
     with open(output_path / "edges.json", "w", encoding="utf-8") as f:
         json.dump(edges_data, f, indent=4, cls=NumpyEncoder)
+
+def json_to_graph(input_dir):
+    """从JSON文件读取并重建图数据
+    
+    Parameters:
+        input_dir (str): JSON文件所在的目录路径
+        
+    Returns:
+        nx.Graph: 重建的NetworkX图对象
+    """
+    input_path = Path(input_dir)
+    
+    # 读取节点数据
+    with open(input_path / "nodes.json", "r", encoding="utf-8") as f:
+        nodes_data = json.load(f)
+    
+    # 读取边数据
+    with open(input_path / "edges.json", "r", encoding="utf-8") as f:
+        edges_data = json.load(f)
+    
+    # 创建新的NetworkX图
+    G = nx.Graph()
+    
+    # 添加节点和属性
+    for node_id, node_attrs in nodes_data.items():
+        # 将列表数据转换回numpy数组
+        processed_attrs = {}
+        for key, value in node_attrs.items():
+            if isinstance(value, dict):
+                # 处理嵌套字典
+                processed_attrs[key] = {k: np.array(v) if isinstance(v, list) else v 
+                                     for k, v in value.items()}
+            else:
+                # 处理普通属性
+                processed_attrs[key] = np.array(value) if isinstance(value, list) else value
+        G.add_node(node_id, **processed_attrs)
+    
+    # 添加边和属性
+    for edge_id, edge_data in edges_data.items():
+        source = edge_data["source"]
+        target = edge_data["target"]
+        attributes = edge_data["attributes"]
+        G.add_edge(source, target, **attributes)
+    
+    return G

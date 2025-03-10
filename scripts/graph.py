@@ -359,10 +359,11 @@ class MoosasGraph:
 
     def draw_graph_3d(self, file_path):
         """绘制图结构的三维表示"""
-        fig = plt.figure(figsize=(6, 6))
+        fig = plt.figure(figsize=(30, 15))
         ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=15, azim=15)  # 设置仰角为30度，方位角为45度
-        
+        ax.view_init(elev=30, azim=15)  # 设置仰角为30度，方位角为45度
+
+
         colors = {
             'window': '#FFBE7A',
             'shading': '#999999',
@@ -384,7 +385,7 @@ class MoosasGraph:
                 color = colors.get(node_type, 'brown')
                 
                 ax.scatter(center[0], center[1], center[2], 
-                        c=color, s=50, edgecolors='k')
+                        c=color, s=25, edgecolors='k')
 
             if 'space_params' in self.graph.nodes[node]:
                 center = self.graph.nodes[node]['space_params']['center']
@@ -393,7 +394,7 @@ class MoosasGraph:
                 else:
                     color = colors['space']
                 ax.scatter(center[0], center[1], center[2], 
-                        c=color, s=100, edgecolors='k')
+                        c=color, s=50, edgecolors='k')
 
         
         # 绘制边
@@ -413,7 +414,7 @@ class MoosasGraph:
                 ax.plot([start_pos[0], end_pos[0]],
                     [start_pos[1], end_pos[1]],
                     [start_pos[2], end_pos[2]],
-                    color=edge_color, linestyle='-', alpha=0.5)
+                    color=edge_color, linestyle='-', alpha=0.05)
 
             if ('space_params' in self.graph.nodes[start_node] and 
                 'face_params' in self.graph.nodes[end_node]):
@@ -432,15 +433,45 @@ class MoosasGraph:
                     color=edge_color, linestyle='--', alpha=0.5)
                     
         # 添加图例
-             
-        
+
+        x_vals, y_vals, z_vals = [], [], []
+    
+        for node in self.graph.nodes():
+            if 'face_params' in self.graph.nodes[node]:
+                center = self.graph.nodes[node]['face_params']['center']
+                x_vals.append(center[0])
+                y_vals.append(center[1])
+                z_vals.append(center[2])
+
+            if 'space_params' in self.graph.nodes[node]:
+                center = self.graph.nodes[node]['space_params']['center']
+                x_vals.append(center[0])
+                y_vals.append(center[1])
+                z_vals.append(center[2])   
+        # 计算中心点和最大范围，确保 xyz 轴比例一致
+        x_mid = (min(x_vals) + max(x_vals)) / 2
+        y_mid = (min(y_vals) + max(y_vals)) / 2
+        z_mid = (min(z_vals) + max(z_vals)) / 2
+        max_range = max(max(x_vals) - min(x_vals), 
+                        max(y_vals) - min(y_vals), 
+                        max(z_vals) - min(z_vals)) / 2
+
+        ax.set_xlim(x_mid - max_range, x_mid + max_range)
+        ax.set_ylim(y_mid - max_range, y_mid + max_range)
+        ax.set_zlim(z_mid - max_range, z_mid + max_range)
+
+        # 确保 xyz 轴比例一致
+
+
+        # 放大显示图形
+        ax.dist = 5  # 减小该值可以放大图形，默认值通常是10
         legend_elements = [
             plt.Line2D([0], [0], marker='o', color='w', 
                     markerfacecolor=v, label=k if k else 'face', 
                     markersize=8)
             for k, v in colors.items()
         ]
-        #ax.legend(handles=legend_elements)
+        ax.legend(handles=legend_elements)
         
         plt.axis('off')
         ax.set_axis_off()

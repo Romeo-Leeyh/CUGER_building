@@ -567,9 +567,9 @@ class MoosasConvexify:
         return len(faces), len(edges), len(nodes)
 
     def plot_faces(faces, lines, file_path):
-        fig = plt.figure(figsize=(8, 8))
+        fig = plt.figure(figsize=(16, 16))
         ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=15, azim=15)
+        ax.view_init(elev=30, azim=15)
 
         for face in faces:
             x, y, z = face[:, 0], face[:, 1], face[:, 2]
@@ -587,9 +587,29 @@ class MoosasConvexify:
 
                 ax.plot(x, y, z, 'blue')  # 绘制多边形的边
 
+        all_points = np.vstack(faces)  # 将所有面连接成一个数组
+        if lines:
+            all_points = np.vstack([all_points] + lines)  # 加入线的点
 
+        x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
+        y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
+        z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
+
+        # 找到所有轴的最大范围
+        max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+        mid_x = (x_max + x_min) / 2.0
+        mid_y = (y_max + y_min) / 2.0
+        mid_z = (z_max + z_min) / 2.0
+
+        # 设置相同范围的 xyz 轴
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        # 统一 xyz 轴比例，保持立方体形状
+        ax.set_box_aspect([1, 1, 1])
         # 设置坐标轴刻度相同
-
+        
         plt.axis('off')
         ax.set_axis_off()
         #plt.show()

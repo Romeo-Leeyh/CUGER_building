@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 class BasicOptions:
     @staticmethod
     def left_on(p1, p2, p3):
-        # 取xy平面投影
+
         p1_2d = p1[:2]
         p2_2d = p2[:2]
         p3_2d = p3[:2]
@@ -26,20 +26,16 @@ class BasicOptions:
         cross = np.cross(v1, v2)
         dot = np.dot(v1, v2)
         
-        # 处理近似平行的情况
         if np.linalg.norm(cross) < 1e-3 * np.linalg.norm(v1) * np.linalg.norm(v2):
-            return 0  # 平行情况
+            return 0  
         
-        # 计算角度
         angle_rad = np.arccos(np.clip(dot/(np.linalg.norm(v1) * np.linalg.norm(v2)), -1.0, 1.0))
         angle_deg = np.degrees(angle_rad)
         
-        # 根据叉积z分量判断旋转方向
         return angle_deg if cross[2] > 0 else -angle_deg
 
     @staticmethod
     def get_angle_tan(p1, p2, verts_all):
-        """计算两点连线与x轴正方向的夹角(弧度制)"""
         vec = verts_all[p2] - verts_all[p1]
         return np.arctan2(vec[1], vec[0])
     
@@ -55,7 +51,7 @@ class BasicOptions:
 
     @staticmethod
     def between(p1, p2, p3):
-        # 使用xy平面投影
+
         p1_2d = p1[:2]
         p2_2d = p2[:2]
         p3_2d = p3[:2]
@@ -66,7 +62,7 @@ class BasicOptions:
 
     @staticmethod
     def intersect(a, b, c, d):
-        # 使用xy平面投影
+
         a_2d = a[:2]
         b_2d = b[:2]
         c_2d = c[:2]
@@ -461,6 +457,7 @@ class MoosasConvexify:
         return quad_faces, quad_normals
     
     def convexify_faces(cat, idd, normal, faces, holes):
+        
         """
         MAIN FUNCTION FOR CONVEXIFY 非凸多边形优化主函数
         1. 读取cat分类、idd序号、normal 法线、faces面节点、holes洞节点

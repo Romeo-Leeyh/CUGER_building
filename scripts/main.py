@@ -97,7 +97,7 @@ def process_geo_files(input_dir):
 
 
 # 执行处理
-#input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
+input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 
 process_geo_files(input)
 

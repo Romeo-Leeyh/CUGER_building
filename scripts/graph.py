@@ -257,7 +257,9 @@ class MoosasGraph:
             
             glazingid = glazing_element.text if glazing_element is not None else None
             shadingid = shading_element.text if shading_element is not None else None
-
+            """/
+            逻辑修改：不能直接读取全部的面，否则空气墙会被同时生成两个节点窗户和墙，同时共享同一个面属性，如果两个面共用同一个faceid，则直接赋予其airwall属性，且之后跳过
+            """
             if glazingid is not None:
 
                 glazings = glazingid.split()
@@ -359,7 +361,7 @@ class MoosasGraph:
 
     def draw_graph_3d(self, file_path):
         """绘制图结构的三维表示"""
-        fig = plt.figure(figsize=(30, 15))
+        fig = plt.figure(figsize=(20, 10))
         ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=30, azim=15)  # 设置仰角为30度，方位角为45度
 
@@ -476,7 +478,7 @@ class MoosasGraph:
         plt.axis('off')
         ax.set_axis_off()
         #plt.title('Building Graph 3D Visualization')
-        #plt.show()
+        plt.show()
         plt.savefig(file_path)
         plt.close()
 

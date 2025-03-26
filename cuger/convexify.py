@@ -145,7 +145,24 @@ class Geometry_Option:
             
         return face
 
-    
+    @staticmethod
+    def is_same_polygon(polygon1, polygon2):
+        """
+        判断两个多边形是否相同，允许多边形的点顺序不同。
+        第一个点固定，其他点的顺序可以逆序排列。
+        """
+        if polygon1.shape != polygon2.shape:
+            return False
+
+        # 固定第一个点，检查其他点是否逆序排列
+        if np.array_equal(polygon1, polygon2):
+            return True
+
+        # 固定第一个点，逆序检查
+        if np.array_equal(polygon1[0], polygon2[0]) and np.array_equal(polygon1[1:], polygon2[:0:-1]):
+            return True
+
+        return False
     
     @staticmethod
     def merge_holes(verts_poly: np.ndarray, verts_holes: dict[int, np.ndarray]) -> np.ndarray:
@@ -489,9 +506,10 @@ class MoosasConvexify:
         
         
         # Face reordering by normal direction
-        for idx, face in enumerate(faces):
+        for idx in range(len(faces)):
+            
             is_upward = normal[idx][2] > 0
-            face = Geometry_Option.reorder_vertices(face, is_upward=is_upward)
+            faces[idx] = Geometry_Option.reorder_vertices(faces[idx], is_upward=is_upward)
             if holes[idx]:
                 for i in range(len(holes[idx])):
                     holes[idx][i] = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
@@ -501,14 +519,15 @@ class MoosasConvexify:
         for idx, face in enumerate(faces):
             if np.abs(normal[idx][2]) > 1e-3:  # Not wall determination
                 poly_ex = face
-                print (face)
+                
                 # Hole Merging
                 poly_in = {}
                 if holes[idx]:
                     for i in range(len(holes[idx])):
                         is_duplicate = any(
-                            np.allclose(holes[idx][i], other_face) or np.array_equal(holes[idx][i], other_face[::-1])
-                            for other_face in faces)
+                            Geometry_Option.is_same_polygon(holes[idx][i], other_face)
+                            for other_face in faces
+                        )
                         if is_duplicate:
                             continue
                         poly_in[i] = holes[idx][i]
@@ -517,7 +536,7 @@ class MoosasConvexify:
                     
                     if mergelines:
                         divide_lines.extend(mergelines)
-                        print (mergelines)
+                        
                 else:
                     verts = poly_ex
 
@@ -550,6 +569,8 @@ class MoosasConvexify:
                 convex_idd.append(idd[idx])
                 convex_normal.append(normal[idx])
                 convex_faces.append(face)
+        
+        print ("--Faces splitting done--")
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         

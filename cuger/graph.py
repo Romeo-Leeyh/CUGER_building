@@ -249,7 +249,7 @@ class MoosasGraph:
 
             self.graph.add_node(uid, node_type="face", face_params=face_params)
 
-        for face in root.findall('face') + root.findall('wall') + root.findall('glazing'):
+        for face in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
             
             uid = face.find('Uid').text
             glazing_element = face.find('glazingId')

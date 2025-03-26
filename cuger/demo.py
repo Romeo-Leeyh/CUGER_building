@@ -52,8 +52,8 @@ def process_file(input_geo_path, modelname):
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
     convex_temp(input_geo_path, paths["output_geo_path"])
-    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
-    graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
+    #graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
      
 def process_geo_files(input_dir):
     for dirpath, dirnames, filenames in os.walk(input_dir):

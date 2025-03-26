@@ -161,6 +161,9 @@ class Geometry_Option:
                 - indices_all: 所有顶点的索引列表
                 - diagonals: 连接线列表，每个元素为(hole_vertex_idx, poly_vertex_idx)
         """
+        if verts_holes is None or len(verts_holes) == 0:
+            return verts_poly, []
+        
         n_poly = len(verts_poly)  # 外围多边形顶点数
         indices_poly = list(range(n_poly))
         indices_holes = {}
@@ -462,7 +465,7 @@ class MoosasConvexify:
         MAIN FUNCTION FOR CONVEXIFY 非凸多边形优化主函数
         1. 读取cat分类、idd序号、normal 法线、faces面节点、holes洞节点
         2. 按照面中节点x+y+z的最小值重排节点起始点，按照法线方向归并所有多边形点序列为逆时针方向
-        3. 针对带洞多边形进行重整(已完成)
+        3. 针对带洞多边形进行重整
         4. 多边形凸化，算法This divide-and-conquer methods base on Arkin, Ronald C.'s report (1987).
             "Path planning for a vision-based autonomous robot"
         5. 将凸化的分割线链接为四边形，并赋予新分类为空气墙
@@ -484,24 +487,37 @@ class MoosasConvexify:
         convex_faces = []
         divide_lines = []
         
+        
+        # Face reordering by normal direction
         for idx, face in enumerate(faces):
-
             is_upward = normal[idx][2] > 0
+            face = Geometry_Option.reorder_vertices(face, is_upward=is_upward)
+            if holes[idx]:
+                for i in range(len(holes[idx])):
+                    holes[idx][i] = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
+        
+        print ("--Faces reodering done--")
 
-            if np.abs(normal[idx][2]) > 1e-3:  # wall判断
-                poly_ex = Geometry_Option.reorder_vertices(face, is_upward=is_upward)
-                
-                # 处理多个洞的情况
+        for idx, face in enumerate(faces):
+            if np.abs(normal[idx][2]) > 1e-3:  # Not wall determination
+                poly_ex = face
+                print (face)
+                # Hole Merging
+                poly_in = {}
                 if holes[idx]:
-                    
-                    poly_in = {}
                     for i in range(len(holes[idx])):
-                        hole_verts = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
-                        poly_in[i] = hole_verts
+                        is_duplicate = any(
+                            np.allclose(holes[idx][i], other_face) or np.array_equal(holes[idx][i], other_face[::-1])
+                            for other_face in faces)
+                        if is_duplicate:
+                            continue
+                        poly_in[i] = holes[idx][i]
+   
+                    verts, mergelines = Geometry_Option.merge_holes(poly_ex, poly_in)
                     
-                    verts, mergelines = Geometry_Option.merge_holes(poly_ex,  poly_in)
-                    divide_lines.extend(mergelines)
-                    
+                    if mergelines:
+                        divide_lines.extend(mergelines)
+                        print (mergelines)
                 else:
                     verts = poly_ex
 
@@ -538,7 +554,7 @@ class MoosasConvexify:
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         
         for i,face in enumerate(quad_faces):
-            convex_cat.append(2)   #新增分类为空气墙
+            convex_cat.append(2)   # new category for air wall 
             convex_idd.append(f"a_{i}")
             convex_normal.append(quad_normals[i])
             convex_faces.append(face)
@@ -547,21 +563,19 @@ class MoosasConvexify:
 
     def calculate (faces):
         edges = set()
-        nodes = set()
+        vertices = set()
 
-        # 遍历所有面
         for face in faces:
-            # 遍历面中的每条边
+            
             for i in range(len(face)):
-                edge = (tuple(face[i].tolist()), tuple(face[(i + 1) % len(face)].tolist()))  # 确保边是元组
-                edge = tuple(sorted(edge))  # 确保每条边是唯一的（无向边）
+                edge = (tuple(face[i].tolist()), tuple(face[(i + 1) % len(face)].tolist()))  
+                edge = tuple(sorted(edge))  
                 edges.add(edge)
             
-            # 将所有节点添加到集合中
-            for node in face:
-                nodes.add(tuple(node.tolist()))  # 将节点转换为元组，确保唯一性
-        
-        return len(faces), len(edges), len(nodes)
+            for vertex in face:
+                vertices.add(tuple(vertex.tolist()))  
+
+        return len(faces), len(edges), len(vertices)
 
     def plot_faces(faces, lines, file_path):
         fig = plt.figure(figsize=(16, 16))
@@ -575,37 +589,33 @@ class MoosasConvexify:
             y = np.append(y, y[0])
             z = np.append(z, z[0])    
 
-            ax.plot(x, y, z, 'purple')  # 绘制多边形的边
+            ax.plot(x, y, z, 'purple')  
             ax.scatter(x, y, z, c='black', marker='o', s=20)
          
         if lines:
             for line in lines:
                 x, y, z = line[:, 0], line[:, 1], line[:, 2] 
 
-                ax.plot(x, y, z, 'blue')  # 绘制多边形的边
+                ax.plot(x, y, z, 'blue')  
 
-        all_points = np.vstack(faces)  # 将所有面连接成一个数组
+        all_points = np.vstack(faces)  
         if lines:
-            all_points = np.vstack([all_points] + lines)  # 加入线的点
+            all_points = np.vstack([all_points] + lines) 
 
         x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
         y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
         z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
 
-        # 找到所有轴的最大范围
         max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
         mid_x = (x_max + x_min) / 2.0
         mid_y = (y_max + y_min) / 2.0
         mid_z = (z_max + z_min) / 2.0
 
-        # 设置相同范围的 xyz 轴
         ax.set_xlim(mid_x - max_range, mid_x + max_range)
         ax.set_ylim(mid_y - max_range, mid_y + max_range)
         ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-        # 统一 xyz 轴比例，保持立方体形状
         ax.set_box_aspect([1, 1, 1])
-        # 设置坐标轴刻度相同
         
         plt.axis('off')
         ax.set_axis_off()

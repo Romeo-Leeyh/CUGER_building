@@ -22,7 +22,7 @@ f = r"C:/Users/LI YIHUI/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/
 model_file = rf"BuildingConvex\data\new_xml\selection0.xml"
 
 model=transform(f, model_file, solve_contains=False, divided_zones=False, break_wall_horizontal=True, solve_redundant=True,
-          attach_shading=False,standardize=False)
+          attach_shading=False,standardize=True)
 
 #model=modelFromFile(model_file)
 

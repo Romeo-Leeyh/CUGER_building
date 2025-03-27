@@ -146,22 +146,83 @@ class Geometry_Option:
         return face
 
     @staticmethod
-    def is_same_polygon(polygon1, polygon2):
+    def is_same_polygon(polygon1, polygon2, projection=False):
         """
-        判断两个多边形是否相同，允许多边形的点顺序不同。
-        第一个点固定，其他点的顺序可以逆序排列。
+        判断两个多边形是否相同，可以处理2D投影或3D坐标。
+        允许多边形的点顺序不同，但第一个点固定，其他点可以逆序排列。
+
+        Args:
+            polygon1: numpy array，形状为 (n, 2) 或 (n, 3)
+            polygon2: numpy array，形状需与 polygon1 一致
+            projection: bool，若为 True 则仅比较前两列（xoy投影）
+
+        Returns:
+            bool: 是否相同
         """
+        # 确保多边形点数相同
         if polygon1.shape != polygon2.shape:
             return False
 
-        # 固定第一个点，检查其他点是否逆序排列
-        if np.array_equal(polygon1, polygon2):
+        # 提取需要比较的坐标
+        if projection:
+            # 确保至少有两个坐标
+            if polygon1.shape[1] < 2 or polygon2.shape[1] < 2:
+                return False
+            poly1 = polygon1[:, :2]
+            poly2 = polygon2[:, :2]
+        else:
+            poly1 = polygon1
+            poly2 = polygon2
+
+        # 直接相同
+        if np.array_equal(poly1, poly2):
             return True
 
-        # 固定第一个点，逆序检查
-        if np.array_equal(polygon1[0], polygon2[0]) and np.array_equal(polygon1[1:], polygon2[:0:-1]):
+        # 第一个点相同，其他点逆序
+        if np.array_equal(poly1[0], poly2[0]) and np.array_equal(poly1[1:], poly2[1:][::-1]):
             return True
 
+        return False
+
+
+    @staticmethod
+    def process_hole(hole, faces, check_projection=True):
+        """
+        处理洞的逻辑，判断是否跳过当前 hole。
+
+        条件：
+        1. hole 与某个 face 三维完全重合
+        2. 若 check_projection 为 True，需额外检查投影是否与其他面不重叠
+
+        Args:
+            hole: numpy array，形状 (n, 3)
+            faces: list[numpy array]，所有面数据
+            check_projection: 是否检查投影重叠
+
+        Returns:
+            bool: 是否跳过该洞
+        """
+        for other_face in faces:
+            # 1. 检查三维完全重合
+            if Geometry_Option.is_same_polygon(hole, other_face):
+                if not check_projection:
+                    return True  # 直接跳过
+                
+                # 2. 检查投影是否与其他面重叠（排除自己）
+                has_projection_overlap = False
+                for face in faces:
+                    if Geometry_Option.is_same_polygon(hole, face):
+                        continue  # 跳过自身
+                    
+                    # 检查投影是否相同（允许逆序）
+                    if Geometry_Option.is_same_polygon(hole, face, projection=True):
+                        has_projection_overlap = True
+                        break
+                
+                # 如果没有其他面投影重叠，则跳过该洞
+                if not has_projection_overlap:
+                    return True
+        
         return False
     
     @staticmethod
@@ -524,13 +585,11 @@ class MoosasConvexify:
                 poly_in = {}
                 if holes[idx]:
                     for i in range(len(holes[idx])):
-                        is_duplicate = any(
-                            Geometry_Option.is_same_polygon(holes[idx][i], other_face)
-                            for other_face in faces
-                        )
-                        if is_duplicate:
-                            continue
-                        poly_in[i] = holes[idx][i]
+                        hole = holes[idx][i]
+                        should_skip = Geometry_Option.process_hole(hole, faces, check_projection=True)
+                        if should_skip:
+                            continue  # 跳过该 hole
+                        poly_in[i] = hole
    
                     verts, mergelines = Geometry_Option.merge_holes(poly_ex, poly_in)
                     

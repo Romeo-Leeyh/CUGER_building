@@ -14,9 +14,9 @@ import moosas.python.Lib.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "E:/DATA/Moosasbuildingdatasets/_cleaned"
-output = "E:/DATA/Moosasbuildingdatasets/"
-figure_path = "E:/DATA/Moosasbuildingdatasets/figure/"
+input = "E:/DATA/Moosasbuildingdatasets_02/_cleaned"
+output = "E:/DATA/Moosasbuildingdatasets_02/"
+figure_path = "E:/DATA/Moosasbuildingdatasets_02/figure/"
 
 
 """
@@ -78,8 +78,8 @@ def process_file(input_geo_path, modelname):
     
     """
     convex_temp(input_geo_path, paths["output_geo_path"])
-    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
-    #graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
+    graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
      
     
     
@@ -97,7 +97,7 @@ def process_geo_files(input_dir):
 
 
 # 执行处理
-input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
+#input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 
 process_geo_files(input)
 

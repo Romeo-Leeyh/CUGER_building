@@ -235,17 +235,23 @@ class MoosasGraph:
             # OBB.plot_obb_and_points(face['vertices'], obb_params)
             
             face_params = {
-                "vertices": face['vertices'],
-                "center": obb_params['center'],
-                "scale": obb_params['scale'],
-                "rotation": obb_params['rotation'],
-                "type": None, # floor, wall, roof
-                "heat_transfer": None,
-                "solar_heat_gain": None
+                "v": face['vertices'], # 3D vertices of the OBB
+                "c": obb_params['center'], # 3D center of the OBB
+                "s": obb_params['scale'], # 3D scale of the OBB
+                "r": obb_params['rotation'], # 3x3 rotation matrix
+                "t": None, # face type: floor, wall, roof
+                "k_h": None, # heat transfer index
+                "shgc": None, # solar heat gain coefficient
+                "r_l": None, # light refelectance
+                "t_l": None, # light transmittance
             }
 
-            if faces_category[i] == '2':
-                face_params["type"] = "airwall"
+            if int(float(faces_category[i])) == 2:
+                face_params["t"] = "airwall"
+                face_params["k_h"] = 0.0
+                face_params["shgc"] = 1.0
+                face_params["r_l"] = 0.0
+                face_params["t_l"] = 1.0
 
             self.graph.add_node(uid, node_type="face", face_params=face_params)
 
@@ -266,18 +272,17 @@ class MoosasGraph:
                 for glazing in glazings:
                     face_id = face.find('faceId').text
                     if face_id in faces_id:
-                        if faces_category[faces_id.index(face_id)] == '2': 
-                            continue
-                        else:
-                            if glazing in self.graph.nodes:
-                                if "face_params" in self.graph.nodes[glazing]:
-                    
-                                    self.graph.add_edge(uid, glazing, attr='glazing')
-                                    self.graph.nodes[glazing]["face_params"]["type"] = "window"
+                        if glazing in self.graph.nodes:
+                            if "face_params" in self.graph.nodes[glazing]:
+                                if self.graph.nodes[glazing]["face_params"]["t"] == "airwall":  
+                                    continue          
                                 else:
-                                    print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                                    self.graph.nodes[glazing]["face_params"]["t"] = "window"
+                                self.graph.add_edge(uid, glazing, attr='glazing')
                             else:
-                                    print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
+                                print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                        else:
+                                print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
                     else:
                         print(f"Skipping edge addition: Face '{face_id}' does not exist.")
                         continue
@@ -285,7 +290,7 @@ class MoosasGraph:
                 shadings = shadingid.split()
                 for shading in shadings:
                     self.graph.add_edge(uid, shading, attr='shading')
-                    self.graph.nodes[shading]["face_params"]["type"] = "shading"
+                    self.graph.nodes[shading]["face_params"]["t"] = "shading"
                     
             neighbors = face.find('neighbor')
 
@@ -320,9 +325,9 @@ class MoosasGraph:
                 if floors is not None:
                     floors_id = floors.text
                     if floors_id in self.graph.nodes:
-                        self.graph.nodes[floors_id]["face_params"]["type"] = "floor"
+                        self.graph.nodes[floors_id]["face_params"]["t"] = "floor"
                         self.graph.add_edge(space_id, floors_id, attr='floor')
-                        space_boundary_verts.append(self.graph.nodes[floors_id]["face_params"]["vertices"])
+                        space_boundary_verts.append(self.graph.nodes[floors_id]["face_params"]["v"])
                     else:
                         print(f"Skipping edge addition: Node  '{floors_id}' does not exist.")
 
@@ -330,9 +335,9 @@ class MoosasGraph:
                 if ceilings is not None:
                     ceilings_id = ceilings.text
                     if ceilings_id in self.graph.nodes:
-                        self.graph.nodes[ceilings_id]["face_params"]["type"] = "floor"
+                        self.graph.nodes[ceilings_id]["face_params"]["t"] = "floor"
                         self.graph.add_edge(space_id, ceilings_id, attr='ceiling')
-                        space_boundary_verts.append(self.graph.nodes[ceilings_id]["face_params"]["vertices"])
+                        space_boundary_verts.append(self.graph.nodes[ceilings_id]["face_params"]["v"])
                     else:
                         print(f"Skipping edge addition: Node  '{ceilings_id}' does not exist.")
 
@@ -340,9 +345,9 @@ class MoosasGraph:
                 for wall in walls:
                     wall_id = wall.find('Uid').text
                     if wall_id in self.graph.nodes:
-                        self.graph.nodes[wall_id]["face_params"]["type"] = "wall"
+                        self.graph.nodes[wall_id]["face_params"]["t"] = "wall"
                         self.graph.add_edge(space_id, wall_id, attr='wall')
-                        space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["vertices"])
+                        space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["v"])
                     else:
                         print(f"Skipping edge addition: Node  '{wall_id}' does not exist.")
 
@@ -350,10 +355,10 @@ class MoosasGraph:
             #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
 
             space_params = {
-                "center": obb_params['center'],
-                "scale": obb_params['scale'],
-                "rotation": obb_params['rotation'],
-                "area": space_area.text
+                "c": obb_params['center'],
+                "s": obb_params['scale'],
+                "r": obb_params['rotation'],
+                "a": space_area.text
             }
 
             self.graph.nodes[space_id]["space_params"] = space_params
@@ -380,9 +385,9 @@ class MoosasGraph:
         # 绘制节点
         for node in self.graph.nodes():
             if 'face_params' in self.graph.nodes[node]:
-                center = self.graph.nodes[node]['face_params']['center']
+                center = self.graph.nodes[node]['face_params']['c']
                 
-                node_type = self.graph.nodes[node]['face_params']['type']
+                node_type = self.graph.nodes[node]['face_params']['t']
 
                 color = colors.get(node_type, 'brown')
                 
@@ -390,7 +395,7 @@ class MoosasGraph:
                         c=color, s=25, edgecolors='k')
 
             if 'space_params' in self.graph.nodes[node]:
-                center = self.graph.nodes[node]['space_params']['center']
+                center = self.graph.nodes[node]['space_params']['c']
                 if self.graph.nodes[node]['node_type'] == 'void':
                     color = colors['void']
                 else:
@@ -405,8 +410,8 @@ class MoosasGraph:
             if ('face_params' in self.graph.nodes[start_node] and 
                 'face_params' in self.graph.nodes[end_node]):
                 
-                start_pos = self.graph.nodes[start_node]['face_params']['center']
-                end_pos = self.graph.nodes[end_node]['face_params']['center']
+                start_pos = self.graph.nodes[start_node]['face_params']['c']
+                end_pos = self.graph.nodes[end_node]['face_params']['c']
 
                 # 获取边的属性
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
@@ -421,8 +426,8 @@ class MoosasGraph:
             if ('space_params' in self.graph.nodes[start_node] and 
                 'face_params' in self.graph.nodes[end_node]):
                 
-                start_pos = self.graph.nodes[start_node]['space_params']['center']
-                end_pos = self.graph.nodes[end_node]['face_params']['center']
+                start_pos = self.graph.nodes[start_node]['space_params']['c']
+                end_pos = self.graph.nodes[end_node]['face_params']['c']
 
                 # 获取边的属性
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
@@ -440,13 +445,13 @@ class MoosasGraph:
     
         for node in self.graph.nodes():
             if 'face_params' in self.graph.nodes[node]:
-                center = self.graph.nodes[node]['face_params']['center']
+                center = self.graph.nodes[node]['face_params']['c']
                 x_vals.append(center[0])
                 y_vals.append(center[1])
                 z_vals.append(center[2])
 
             if 'space_params' in self.graph.nodes[node]:
-                center = self.graph.nodes[node]['space_params']['center']
+                center = self.graph.nodes[node]['space_params']['c']
                 x_vals.append(center[0])
                 y_vals.append(center[1])
                 z_vals.append(center[2])   
@@ -473,12 +478,12 @@ class MoosasGraph:
                     markersize=8)
             for k, v in colors.items()
         ]
-        ax.legend(handles=legend_elements)
+        #ax.legend(handles=legend_elements)
         
         plt.axis('off')
         ax.set_axis_off()
         #plt.title('Building Graph 3D Visualization')
-        plt.show()
+        #plt.show()
         plt.savefig(file_path)
         plt.close()
 

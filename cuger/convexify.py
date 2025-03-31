@@ -699,6 +699,6 @@ class MoosasConvexify:
         
         plt.axis('off')
         ax.set_axis_off()
-        plt.show()
+        #plt.show()
         plt.savefig(file_path)
         plt.close()

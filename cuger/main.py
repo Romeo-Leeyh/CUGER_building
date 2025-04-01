@@ -3,7 +3,6 @@ import os
 from __transform.convexify import MoosasConvexify
 from __transform.graph import MoosasGraph
 import __transform.process as ps
-from graphIO import read_geo, write_geo, read_xml, graph_to_json
 import sys
 
 main_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,16 +16,13 @@ user_profile = os.environ['USERPROFILE']
 
 input = "E:/DATA/Moosasbuildingdatasets_02/_cleaned"
 output = "E:/DATA/Moosasbuildingdatasets_02/output_0"
-figure_path = "E:/DATA/Moosasbuildingdatasets_02/figure/"
-
+_fig_show = False
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
-    
     if os.path.exists(paths["output_geo_path"]):
         print(f"--Skip-- | {modelname}")
         return
-    
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
     
@@ -47,23 +43,17 @@ def process_file(input_geo_path, modelname):
     graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])"
     """
      
-    
-    
-# 遍历文件夹，处理所有 .geo 文件
-def process_geo_files(input_dir):
-    for dirpath, dirnames, filenames in os.walk(input_dir):
-        for filename in filenames:
-            if filename.endswith('.geo'):
-                
-                input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
-                relative_path = os.path.relpath(input_geo_path, input_dir)
-                basename = os.path.splitext(relative_path)[0].replace('\\', '_')
-                process_file(input_geo_path, basename)
-                
 
 
 # 执行处理
 input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 
-process_geo_files(input)
+for dirpath, dirnames, filenames in os.walk(input):
+    for filename in filenames:
+        if filename.endswith('.geo'):
+            
+            input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
+            relative_path = os.path.relpath(input_geo_path, input)
+            basename = os.path.splitext(relative_path)[0].replace('\\', '_')
+            process_file(input_geo_path, basename)
 

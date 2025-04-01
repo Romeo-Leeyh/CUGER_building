@@ -263,9 +263,7 @@ class MoosasGraph:
             
             glazingid = glazing_element.text if glazing_element is not None else None
             shadingid = shading_element.text if shading_element is not None else None
-            """/
-            逻辑修改：不能直接读取全部的面，否则空气墙会被同时生成两个节点窗户和墙，同时共享同一个面属性，如果两个面共用同一个faceid，则直接赋予其airwall属性，且之后跳过
-            """
+      
             if glazingid is not None:
 
                 glazings = glazingid.split()

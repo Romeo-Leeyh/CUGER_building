@@ -2,6 +2,7 @@ import os
 
 from __transform.convexify import MoosasConvexify
 from __transform.graph import MoosasGraph
+import __transform.process as ps
 from graphIO import read_geo, write_geo, read_xml, graph_to_json
 import sys
 
@@ -19,44 +20,8 @@ output = "E:/DATA/Moosasbuildingdatasets_02/output_0"
 figure_path = "E:/DATA/Moosasbuildingdatasets_02/figure/"
 
 
-"""
-input_geo_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.geo"   
-
-input_xml_path = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/selection0.xml" 
-
-output_geo_path = "BuildingConvex/data/selection0_convex.geo"
-output_xml_path = "BuildingConvex/data/selection0_convex.xml"
-output_json_path = "BuildingConvex/data/adjson"
-
-new_geo_path = "BuildingConvex/data/selection0_new.geo"
-new_xml_path = "BuildingConvex/data/selection0_new.xml"
-"""
-
-def get_output_paths(modelname):
-    return {
-        "output_geo_path": os.path.join(output, "geo", f"{modelname}.geo"),
-        "output_json_path": os.path.join(output, "graph", f"{modelname}"),
-        "new_xml_path": os.path.join(output, "new_xml", f"{modelname}.xml"),
-        "new_geo_path": os.path.join(output, "new_geo", f"{modelname}.geo"),
-        "figure_path": os.path.join(output, "figure", f"{modelname}.png")
-    }
-
-def convex_temp(input_geo_path, output_geo_path):
-    cat, idd, normal, faces, holes = read_geo(input_geo_path)
-    convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
-    write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
-    #MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path)
-    F, E, V = MoosasConvexify.calculate(convex_faces)
-    print(f"Number of faces: {F}, Number of edges: {E}, Number of vertices: {V}, Euler number: {V - E + F}")
-
-def graph_temp(new_geo_path, new_xml_path, output_json_path):
-    graph = MoosasGraph()
-    graph.graph_representation(new_geo_path, new_xml_path) 
-    #graph.draw_graph_3d() 
-    graph_to_json(graph, output_json_path)
-
 def process_file(input_geo_path, modelname):
-    paths = get_output_paths(modelname)
+    paths = ps.get_output_paths(modelname, output)
     
     if os.path.exists(paths["output_geo_path"]):
         print(f"--Skip-- | {modelname}")
@@ -66,9 +31,9 @@ def process_file(input_geo_path, modelname):
     
     
     try:
-        #convex_temp(input_geo_path, paths["output_geo_path"])
+        ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
         Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], divided_zones=False, standardize=True)
-        graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+        ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
     except ValueError as e:
         print(f"ValueError: {e} - Modelname: {modelname}")
     except FileNotFoundError as e:
@@ -98,7 +63,7 @@ def process_geo_files(input_dir):
 
 
 # 执行处理
-#input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
+input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 
 process_geo_files(input)
 

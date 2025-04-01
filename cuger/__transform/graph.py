@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import xml.etree.ElementTree as ET
-import convexify
+from . import convexify
 from graphIO import read_geo, write_geo, read_xml
 from scipy.spatial.transform import Rotation as R
 

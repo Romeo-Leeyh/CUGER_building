@@ -1,8 +1,8 @@
 import os
 import sys
 
-from convexify import MoosasConvexify
-from graph import MoosasGraph
+from __transform.convexify import MoosasConvexify
+from __transform.graph import MoosasGraph
 from graphIO import read_geo, write_geo, read_xml, graph_to_json
 
 
@@ -32,13 +32,13 @@ def convex_temp(input_geo_path, output_geo_path):
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
     convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
-    MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path)
+    MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path, _fig_show=True)
 
 
 def graph_temp(new_geo_path, new_xml_path, output_json_path):
     graph = MoosasGraph()
     graph.graph_representation(new_geo_path, new_xml_path) 
-    graph.draw_graph_3d(file_path=figure_path) 
+    graph.draw_graph_3d(file_path=figure_path, _fig_show=True) 
     graph_to_json(graph, output_json_path)
 
 def process_file(input_geo_path, modelname):
@@ -51,8 +51,8 @@ def process_file(input_geo_path, modelname):
     """
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
-    #convex_temp(input_geo_path, paths["output_geo_path"])
-    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
+    convex_temp(input_geo_path, paths["output_geo_path"])
+    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
     graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
      
 def process_geo_files(input_dir):

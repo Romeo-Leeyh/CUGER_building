@@ -364,7 +364,7 @@ class MoosasGraph:
             self.graph.nodes[space_id]["space_params"] = space_params
 
 
-    def draw_graph_3d(self, file_path):
+    def draw_graph_3d(self, file_path, _fig_show =False):
         """绘制图结构的三维表示"""
         fig = plt.figure(figsize=(20, 10))
         ax = fig.add_subplot(111, projection='3d')
@@ -483,7 +483,8 @@ class MoosasGraph:
         plt.axis('off')
         ax.set_axis_off()
         #plt.title('Building Graph 3D Visualization')
-        #plt.show()
+        if _fig_show:
+            plt.show()
         plt.savefig(file_path)
         plt.close()
 

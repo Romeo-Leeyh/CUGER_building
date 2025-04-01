@@ -1,7 +1,7 @@
 import os
 
-from convexify import MoosasConvexify
-from graph import MoosasGraph
+from __transform.convexify import MoosasConvexify
+from __transform.graph import MoosasGraph
 from graphIO import read_geo, write_geo, read_xml, graph_to_json
 import sys
 
@@ -15,7 +15,7 @@ import moosas.python.Lib.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 
 input = "E:/DATA/Moosasbuildingdatasets_02/_cleaned"
-output = "E:/DATA/Moosasbuildingdatasets_02/"
+output = "E:/DATA/Moosasbuildingdatasets_02/output_0"
 figure_path = "E:/DATA/Moosasbuildingdatasets_02/figure/"
 
 
@@ -60,14 +60,14 @@ def process_file(input_geo_path, modelname):
     
     if os.path.exists(paths["output_geo_path"]):
         print(f"--Skip-- | {modelname}")
-        #return
+        return
     
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
-    """
+    
     try:
-        convex_temp(input_geo_path, paths["output_geo_path"])
-        Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False, standardize=True)
+        #convex_temp(input_geo_path, paths["output_geo_path"])
+        Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], divided_zones=False, standardize=True)
         graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
     except ValueError as e:
         print(f"ValueError: {e} - Modelname: {modelname}")
@@ -79,7 +79,8 @@ def process_file(input_geo_path, modelname):
     """
     convex_temp(input_geo_path, paths["output_geo_path"])
     Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
-    graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])
+    graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"])"
+    """
      
     
     

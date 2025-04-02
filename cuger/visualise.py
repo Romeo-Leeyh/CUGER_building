@@ -134,11 +134,64 @@ def draw_graph_3d(graph, file_path, _fig_show =False):
     plt.close()
 
 
+def plot_faces(faces, lines, file_path, _fig_show =False):
+    fig = plt.figure(figsize=(16, 16))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=30, azim=15)
+
+    for face in faces:
+        x, y, z = face[:, 0], face[:, 1], face[:, 2]
+
+        x = np.append(x, x[0])
+        y = np.append(y, y[0])
+        z = np.append(z, z[0])    
+
+        ax.plot(x, y, z, 'purple')  
+        ax.scatter(x, y, z, c='black', marker='o', s=20)
+        
+    if lines:
+        for line in lines:
+            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
+
+            ax.plot(x, y, z, 'blue')  
+
+    all_points = np.vstack(faces)  
+    if lines:
+        all_points = np.vstack([all_points] + lines) 
+
+    x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
+    y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
+    z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
+
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+    mid_x = (x_max + x_min) / 2.0
+    mid_y = (y_max + y_min) / 2.0
+    mid_z = (z_max + z_min) / 2.0
+
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_box_aspect([1, 1, 1])
+    
+    plt.axis('off')
+    ax.set_axis_off()
+
+    plt.savefig(file_path)
+    if _fig_show:
+        plt.show()
+    plt.close()
 
 
+_fig_show = True
+input_geo_dir = "BuildingConvex/data/geo/selection0.geo"
+output_geo_dir = "BuildingConvex/data/geo/selection0_geo.png"
+input_graph_dir = "BuildingConvex/data/graph/selection0"
+output_graph_dir = "BuildingConvex/data/selection0_graph.png"
 
+cat, idd, normal, faces, holes = read_geo(input_geo_dir)
+plot_faces(faces, file_path=output_geo_dir, _fig_show=_fig_show)
 
-input_dir = "BuildingConvex\data\graph\selection0"
-G = json_to_graph(input_dir)
+G = json_to_graph(input_graph_dir)
+draw_graph_3d(G, file_path=output_graph_dir, _fig_show=_fig_show)
 
-draw_graph_3d(G, file_path="BuildingConvex/data/figure_graph/selection0_graph.png", _fig_show=True)

@@ -134,7 +134,7 @@ def draw_graph_3d(graph, file_path, _fig_show =False):
     plt.close()
 
 
-def plot_faces(faces, lines, file_path, _fig_show =False):
+def plot_faces(faces, file_path, _fig_show =False):
     fig = plt.figure(figsize=(16, 16))
     ax = fig.add_subplot(111, projection='3d')
     ax.view_init(elev=30, azim=15)
@@ -149,15 +149,9 @@ def plot_faces(faces, lines, file_path, _fig_show =False):
         ax.plot(x, y, z, 'purple')  
         ax.scatter(x, y, z, c='black', marker='o', s=20)
         
-    if lines:
-        for line in lines:
-            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
-
-            ax.plot(x, y, z, 'blue')  
 
     all_points = np.vstack(faces)  
-    if lines:
-        all_points = np.vstack([all_points] + lines) 
+
 
     x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
     y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])

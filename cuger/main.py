@@ -14,8 +14,8 @@ import moosas.python.Lib.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "E:/DATA/Moosasbuildingdatasets_02/_cleaned"
-output = "E:/DATA/Moosasbuildingdatasets_02/output_0"
+input = "E:/DATA/Moosasbuildingdatasets_03/_newcleaned(rotation)"
+output = "E:/DATA/Moosasbuildingdatasets_03/output"
 _fig_show = False
 
 def process_file(input_geo_path, modelname):
@@ -46,7 +46,7 @@ def process_file(input_geo_path, modelname):
 
 
 # 执行处理
-input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
+#input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 
 for dirpath, dirnames, filenames in os.walk(input):
     for filename in filenames:

@@ -16,7 +16,7 @@ import moosas.python.Lib.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 output = "BuildingConvex/data"
-_fig_show = False
+_fig_show = True
 
 def get_output_paths(modelname):
     return {

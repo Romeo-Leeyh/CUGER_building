@@ -68,11 +68,12 @@ def draw_graph_3d(graph, file_path, _fig_show =False):
                 [start_pos[2], end_pos[2]],
                 color=edge_color, linestyle='-', alpha=0.05)
 
-        if ('space_params' in graph.nodes[start_node] and 
-            'face_params' in graph.nodes[end_node]):
+        if ('space_params' in graph.nodes[end_node] and 
+            'face_params' in graph.nodes[start_node]):
             
-            start_pos = graph.nodes[start_node]['space_params']['c']
-            end_pos = graph.nodes[end_node]['face_params']['c']
+            start_pos = graph.nodes[start_node]['face_params']['c']
+            end_pos = graph.nodes[end_node]['space_params']['c']
+            
 
             # 获取边的属性
             edge_attr = graph.edges[edge].get('attr', 'default')
@@ -187,5 +188,7 @@ cat, idd, normal, faces, holes = read_geo(input_geo_dir)
 plot_faces(faces, file_path=output_geo_dir, _fig_show=_fig_show)
 
 G = json_to_graph(input_graph_dir)
+#print(G.nodes(data=True))
+print(G.edges(data=True))
 draw_graph_3d(G, file_path=output_graph_dir, _fig_show=_fig_show)
 

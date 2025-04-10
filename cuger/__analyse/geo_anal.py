@@ -15,6 +15,50 @@ colors = {
     None: 'white'
 }
 
+def plot_faces(faces, file_path, _fig_show =False):
+    fig = plt.figure(figsize=(16, 16))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=30, azim=15)
+
+    for face in faces:
+        x, y, z = face[:, 0], face[:, 1], face[:, 2]
+
+        x = np.append(x, x[0])
+        y = np.append(y, y[0])
+        z = np.append(z, z[0])    
+
+        ax.plot(x, y, z, 'purple')  
+        ax.scatter(x, y, z, c='black', marker='o', s=20)
+        
+
+    all_points = np.vstack(faces)  
+
+
+    x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
+    y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
+    z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
+
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+    mid_x = (x_max + x_min) / 2.0
+    mid_y = (y_max + y_min) / 2.0
+    mid_z = (z_max + z_min) / 2.0
+
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_box_aspect([1, 1, 1])
+    
+    plt.axis('off')
+    ax.set_axis_off()
+
+    plt.savefig(file_path)
+    if _fig_show:
+        plt.show()
+    plt.close()
+
+
+
 def calculate_euler (faces):
     edges = set()
     vertices = set()

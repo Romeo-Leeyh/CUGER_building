@@ -641,21 +641,7 @@ class MoosasConvexify:
 
         return convex_cat, convex_idd, convex_normal, convex_faces, divide_lines
 
-    def calculate (faces):
-        edges = set()
-        vertices = set()
 
-        for face in faces:
-            
-            for i in range(len(face)):
-                edge = (tuple(face[i].tolist()), tuple(face[(i + 1) % len(face)].tolist()))  
-                edge = tuple(sorted(edge))  
-                edges.add(edge)
-            
-            for vertex in face:
-                vertices.add(tuple(vertex.tolist()))  
-
-        return len(faces), len(edges), len(vertices)
 
     def plot_faces(faces, lines, file_path, _fig_show =False):
         fig = plt.figure(figsize=(16, 16))

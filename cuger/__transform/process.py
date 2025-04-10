@@ -54,10 +54,6 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
     # Write convexified geometry data
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
 
-    # Calculate and print geometric properties
-    F, E, V = MoosasConvexify.calculate(convex_faces)
-    euler_number = V - E + F
-    print(f"Number of faces: {F}, Number of edges: {E}, Number of vertices: {V}, Euler number: {euler_number}")
 
     if figure_path:
         MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path)

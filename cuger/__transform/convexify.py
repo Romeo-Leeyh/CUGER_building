@@ -511,7 +511,6 @@ class MoosasConvexify:
                     break
             if not found_group:
                 line_groups[i].append((divide_lines[i], z_lines[i]))
-        
 
         # Process each group to form quadrilaterals
         for group in line_groups.values():
@@ -525,16 +524,18 @@ class MoosasConvexify:
             for k in range(len(group) - 1):
                 line1, _ = group[k]
                 line2, _ = group[k + 1]
-                
+
+                # Skip if the two lines are geometrically identical (same endpoints)
+                if (np.allclose(line1, line2) or np.allclose(line1, line2[::-1])):
+                    continue
+
                 quad_face = np.array([line1[0], line1[1], line2[1], line2[0]])
-                normal_vector = np.cross(line1[0]-line1[1], line1[0]-line2[0])
+                normal_vector = np.cross(line1[0] - line1[1], line1[0] - line2[0])
                 quad_normal = normal_vector / np.linalg.norm(normal_vector)
 
                 quad_faces.append(quad_face)
                 quad_normals.append(quad_normal)
 
-
-        
         return quad_faces, quad_normals
     
     def convexify_faces(cat, idd, normal, faces, holes):

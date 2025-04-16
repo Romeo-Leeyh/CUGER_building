@@ -14,7 +14,7 @@ import moosas.python.Lib.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "E:/DATA/Moosasbuildingdatasets_03/_newcleaned(rotation)"
+input = "E:/DATA/Moosasbuildingdatasets_02/_newcleaned(rotation)"
 output = "E:/DATA/Moosasbuildingdatasets_03/output"
 _fig_show = False
 

@@ -16,6 +16,7 @@ import moosas.python.Lib.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 input = "BuildingConvex\data\sample"
+#input = "E:/DATA/Daylighting_test/model/evomass/geo"
 output = "BuildingConvex/data"
 _fig_show = True
 
@@ -53,15 +54,22 @@ def process_file(input_geo_path, modelname):
     """
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
-    #convex_temp(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
-    #Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], divided_zones=False,  standardize=True)
+    convex_temp(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
+    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], 
+                     solve_contains=False, 
+                     divided_zones=False, 
+                     break_wall_horizontal=True, 
+                     solve_redundant=True,
+                     attach_shading=False,
+                     standardize=True)
     graph_temp(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
      
 def process_geo_files(input_dir):
     for dirpath, dirnames, filenames in os.walk(input_dir):
         for filename in filenames:
-            if filename.endswith('test.geo'):
-                
+            #if filename.endswith('20250416_143539.geo'):
+            if filename.endswith('test.geo'):    
+            #if filename.endswith('selection0.geo'):    
                 input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
                 print (f"Processing {input_geo_path}")
 

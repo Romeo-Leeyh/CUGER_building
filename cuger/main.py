@@ -14,13 +14,15 @@ import moosas.python.Lib.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "E:/DATA/Moosasbuildingdatasets_02/_newcleaned(rotation)"
-output = "E:/DATA/Moosasbuildingdatasets_03/output"
+input = "E:/DATA/Daylighting_test/model/evomass/geo"
+output = "E:/DATA/Daylighting_test/model/evomass/output"
 _fig_show = False
+
+
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
-    if os.path.exists(paths["output_geo_path"]):
+    if os.path.exists(paths["output_json_path"]):
         print(f"--Skip-- | {modelname}")
         return
     print(f"Processing file: {input_geo_path}, basename: {modelname}")

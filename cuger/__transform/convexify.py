@@ -635,7 +635,7 @@ class MoosasConvexify:
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         
         for i,face in enumerate(quad_faces):
-            convex_cat.append(2)   # new category for air wall 
+            convex_cat.append("2")   # new category for air wall 
             convex_idd.append(f"a_{i}")
             convex_normal.append(quad_normals[i])
             convex_faces.append(face)

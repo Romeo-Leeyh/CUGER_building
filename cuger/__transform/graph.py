@@ -186,7 +186,7 @@ class MoosasGraph:
         self.faces = []
         self.positions = {}
 
-    def graph_representation(self, geo_path, xml_path):
+    def graph_representation(self, geo_path, xml_path, _is_cleaned=True):
         """
             Parse .xml and associated .geo files and build the ADSIM graph
             Args:  
@@ -248,10 +248,9 @@ class MoosasGraph:
 
             if int(float(faces_category[i])) == 2:
                 face_params["t"] = "airwall"
-                face_params["k_h"] = 0.0
-                face_params["shgc"] = 1.0
-                face_params["r_l"] = 0.0
-                face_params["t_l"] = 1.0
+
+            if int(float(faces_category[i])) == 1:
+                face_params["t"] = "window"
 
             self.graph.add_node(uid, node_type="face", face_params=face_params)
 
@@ -272,15 +271,11 @@ class MoosasGraph:
                     if face_id in faces_id:
                         if glazing in self.graph.nodes:
                             if "face_params" in self.graph.nodes[glazing]:
-                                if self.graph.nodes[glazing]["face_params"]["t"] == "airwall":  
-                                    continue          
-                                else:
-                                    self.graph.nodes[glazing]["face_params"]["t"] = "window"
                                 self.graph.add_edge(uid, glazing, attr='glazing')
                             else:
-                                print(f"Skipping edge addition: Node  '{glazing}' does not defined.")
+                                print(f"Skipping edge addition: Node glazing '{glazing}' does not defined.")
                         else:
-                                print(f"Skipping edge addition: Node  '{glazing}' does not exist.")
+                                print(f"Skipping edge addition: Node glazing '{glazing}' does not exist.")
                     else:
                         print(f"Skipping edge addition: Face '{face_id}' does not exist.")
                         continue
@@ -327,7 +322,7 @@ class MoosasGraph:
                         self.graph.add_edge(space_id, floors_id, attr='floor')
                         space_boundary_verts.append(self.graph.nodes[floors_id]["face_params"]["v"])
                     else:
-                        print(f"Skipping edge addition: Node  '{floors_id}' does not exist.")
+                        print(f"Skipping edge addition: Node floor '{floors_id}' does not exist.")
 
                 ceilings = topology.find('ceiling/face')
                 if ceilings is not None:
@@ -337,7 +332,7 @@ class MoosasGraph:
                         self.graph.add_edge(space_id, ceilings_id, attr='ceiling')
                         space_boundary_verts.append(self.graph.nodes[ceilings_id]["face_params"]["v"])
                     else:
-                        print(f"Skipping edge addition: Node  '{ceilings_id}' does not exist.")
+                        print(f"Skipping edge addition: Node ceiling '{ceilings_id}' does not exist.")
 
                 walls = topology.findall('edge/wall')
                 for wall in walls:
@@ -347,7 +342,7 @@ class MoosasGraph:
                         self.graph.add_edge(space_id, wall_id, attr='wall')
                         space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["v"])
                     else:
-                        print(f"Skipping edge addition: Node  '{wall_id}' does not exist.")
+                        print(f"Skipping edge addition: Node wall '{wall_id}' does not exist.")
 
             obb_params = OBB.create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
             #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
@@ -361,6 +356,13 @@ class MoosasGraph:
 
             self.graph.nodes[space_id]["space_params"] = space_params
 
+
+        #3  clean the graph nodes without edges
+        if _is_cleaned:
+            for node in list(self.graph.nodes()):
+                if self.graph.degree(node) == 0:
+                    self.graph.remove_node(node)
+                    print (f"Removing node: {node}")
 
     def draw_graph_3d(self, file_path, _fig_show =False):
         """绘制图结构的三维表示"""

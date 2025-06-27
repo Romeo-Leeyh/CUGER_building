@@ -21,56 +21,57 @@ def read_geo(file_path):
     """
     cat, idd, normal, faces, holes = [], [], [], [], []
 
+    def next_nonempty_line(file):
+
+        line = file.readline()
+        while line and line.strip() == '':
+            line = file.readline()
+        return line.strip()
+
     try:
         with open(file_path, "r", encoding='utf-8') as f:
-            read = f.readline().strip()
+            read = next_nonempty_line(f)
             
-            while read != '':
+            while read:
                 if read.startswith("f,"):
-                    # Parse the category (opaque, translucent, air wall) and face ID
                     parts = read.split(',')
-                    cat.append(str(parts[1]))  # 0, 1, or 2 for category
-                    idd.append(str(parts[2]))  # Face ID
-                    read = f.readline().strip()
+                    cat.append(str(parts[1]))
+                    idd.append(str(parts[2]))
+                    read = next_nonempty_line(f)
                     continue
 
                 if read.startswith("fn,"):
-                    # Parse normal vector (x, y, z)
                     normal_parts = read.split(',')
                     normal_t = np.array([float(normal_parts[1]), float(normal_parts[2]), float(normal_parts[3])])
                     normal.append(normal_t)
-                    read = f.readline().strip()
+                    read = next_nonempty_line(f)
                     continue
 
                 if read.startswith("fv,"):
-                    # Parse face vertices
                     vertices = []
                     while read.startswith("fv,"):
                         vertex_parts = read.split(',')
                         vertex = np.array([float(vertex_parts[1]), float(vertex_parts[2]), float(vertex_parts[3])])
                         vertices.append(vertex)
-                        read = f.readline().strip()
-                    
-                    faces.append(np.array(vertices))  # Store face coordinates as arrays
-                    holes.append(None)  # Add None for holes if no fh is found
-                    continue
-                
-                if read.startswith("fh,"):
-                    # Parse hole vertices in face
-                    current_face_holes = {}  # 为每个面创建新的字典
-                    while read.startswith("fh,"):
-                        vertex_parts = read.split(',')
-                        hole_id = int(vertex_parts[1])  # Parse hole ID
-                        vertex = np.array([float(vertex_parts[2]), float(vertex_parts[3]), float(vertex_parts[4])])
-                        if hole_id not in current_face_holes:
-                            current_face_holes[hole_id] = []  
-                        current_face_holes[hole_id].append(vertex)
-                        read = f.readline().strip()
-                    holes[-1] = current_face_holes.copy()  # Replace None with actual holes data
+                        read = next_nonempty_line(f)
+                    faces.append(np.array(vertices))
+                    holes.append(None)
                     continue
 
-                # Read next line
-                read = f.readline().strip()
+                if read.startswith("fh,"):
+                    current_face_holes = {}
+                    while read.startswith("fh,"):
+                        vertex_parts = read.split(',')
+                        hole_id = int(vertex_parts[1])
+                        vertex = np.array([float(vertex_parts[2]), float(vertex_parts[3]), float(vertex_parts[4])])
+                        if hole_id not in current_face_holes:
+                            current_face_holes[hole_id] = []
+                        current_face_holes[hole_id].append(vertex)
+                        read = next_nonempty_line(f)
+                    holes[-1] = current_face_holes.copy()
+                    continue
+
+                read = next_nonempty_line(f)
 
 
 

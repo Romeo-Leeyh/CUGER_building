@@ -1,25 +1,19 @@
-
-
-
-
-
-
 import pygeos, os
 import numpy as np
 import sys, re, time, json
 from datetime import datetime
 
+
 main_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if main_dir not in sys.path:
     sys.path.append(main_dir)
 
-from moosas.python.Lib.MoosasPy import transform
-from moosas.python.Lib.MoosasPy.IO import modelFromFile
-from moosas.python.Lib.MoosasPy.daylighting import simModel
+from moosas.MoosasPy import transform
+from moosas.MoosasPy.daylighting import simModel
 user_profile = os.environ['USERPROFILE']
-input = "E:/DATA/Moosasbuildingdatasets_02/_cleaned"
-output = "E:/DATA/Moosasbuildingdatasets_02/simulation"
-# input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
+input = "E:/DATA/Daylighting_test/model/evomass/geo"
+output = "E:/DATA/Daylighting_test/model/evomass/results_moosas"
+#input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 if not os.path.exists(output):
     os.makedirs(output)
 
@@ -54,6 +48,4 @@ for dirpath, dirnames, filenames in os.walk(input):
                 print(f"Error processing {filename}: {e}")
                 continue
 
-            break
-
-print("Time:", time.time() - t)
+            

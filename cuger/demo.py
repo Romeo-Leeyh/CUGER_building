@@ -16,8 +16,10 @@ import moosas.python.Lib.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 input = "BuildingConvex\data\sample"
+input = "E:/DATA/CUGER_buildingdatasets/1028_17_46_89_255"
+output = "E:/DATA/CUGER_buildingdatasets/results"
 #input = "E:/DATA/Daylighting_test/model/evomass/geo"
-output = "BuildingConvex/data"
+#output = "BuildingConvex/data"
 _fig_show = True
 
 def get_output_paths(modelname):
@@ -31,14 +33,16 @@ def get_output_paths(modelname):
         "figure_graph_path": os.path.join(output, "figure_graph", f"{modelname}_graph.png"),
     }
 
-def convex_temp(input_geo_path, output_geo_path, figure_path=None):
+def convex_temp(input_geo_path, output_geo_path, figure_path):
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
+    print (f"Read {len(faces)} faces from {input_geo_path}")
     convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(cat, idd, normal, faces, holes)
+
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
     MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path, _fig_show=_fig_show)
 
 
-def graph_temp(new_geo_path, new_xml_path, output_json_path, figure_path=None):
+def graph_temp(new_geo_path, new_xml_path, output_json_path, figure_path):
     graph = MoosasGraph()
     graph.graph_representation(new_geo_path, new_xml_path) 
     graph.draw_graph_3d(file_path=figure_path, _fig_show=_fig_show) 
@@ -55,9 +59,9 @@ def process_file(input_geo_path, modelname):
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
     convex_temp(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
-    Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], 
+    Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], 
                      solve_contains=False, 
-                     divided_zones=False, 
+                     divided_zones=True, 
                      break_wall_horizontal=True, 
                      solve_redundant=True,
                      attach_shading=False,
@@ -67,9 +71,11 @@ def process_file(input_geo_path, modelname):
 def process_geo_files(input_dir):
     for dirpath, dirnames, filenames in os.walk(input_dir):
         for filename in filenames:
-            #if filename.endswith('20250416_143539.geo'):
-            if filename.endswith('test.geo'):    
-            #if filename.endswith('selection0.geo'):    
+            #if filename.endswith('20250416_143152.geo'):
+            #if filename.endswith('test.geo'):  
+             
+            #if filename.endswith('20250416_143152.geo'):      
+            if filename.endswith('.geo'):    
                 input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
                 print (f"Processing {input_geo_path}")
 

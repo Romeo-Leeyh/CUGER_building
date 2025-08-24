@@ -8,15 +8,16 @@ main_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 if main_dir not in sys.path:
     sys.path.append(main_dir)
 
-import moosas.python.Lib.MoosasPy as Moosas
+import moosas.MoosasPy as Moosas
 
 #main
 user_profile = os.environ['USERPROFILE']
 
-input = "E:/DATA/CUGER_buildingdatasets/1028_17_46_89_255"
-output = "E:/DATA/CUGER_buildingdatasets/results"
+#input = "E:/DATA/CUGER_buildingdatasets/1028_17_46_89_255"
+#output = "E:/DATA/CUGER_buildingdatasets/results"
 _fig_show = True
-
+input = "results/example"
+output = "results/example_results"
 
 
 def process_file(input_geo_path, modelname):
@@ -48,9 +49,9 @@ def process_file(input_geo_path, modelname):
     
     """
     ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
-    Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], 
+    Moosas.transform(paths, 
                     solve_contains=False, 
-                    divided_zones=False, 
+                    divided_zones=True, 
                     break_wall_horizontal=True, 
                     solve_redundant=True,
                     attach_shading=False,

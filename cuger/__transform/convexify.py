@@ -647,7 +647,7 @@ class MoosasConvexify:
     def plot_faces(faces, lines, file_path, _fig_show =False):
         fig = plt.figure(figsize=(16, 16))
         ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=30, azim=15)
+        ax.view_init(elev=45, azim=15)
 
         for face in faces:
             x, y, z = face[:, 0], face[:, 1], face[:, 2]
@@ -688,5 +688,5 @@ class MoosasConvexify:
         ax.set_axis_off()
         if _fig_show:
             plt.show()
-        plt.savefig(file_path)
+        plt.savefig(file_path, dpi=300)
         plt.close()

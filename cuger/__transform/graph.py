@@ -368,7 +368,7 @@ class MoosasGraph:
         """绘制图结构的三维表示"""
         fig = plt.figure(figsize=(20, 10))
         ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=30, azim=15)  # 设置仰角为30度，方位角为45度
+        ax.view_init(elev=45, azim=15)  # 设置仰角为30度，方位角为45度
 
 
         colors = {
@@ -485,7 +485,7 @@ class MoosasGraph:
         #plt.title('Building Graph 3D Visualization')
         if _fig_show:
             plt.show()
-        plt.savefig(file_path)
+        plt.savefig(file_path, dpi = 300)
         plt.close()
 
     def nodes(self):

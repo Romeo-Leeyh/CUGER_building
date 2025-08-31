@@ -4,8 +4,7 @@ __pycache__/
 *$py.class
 __temp__/
 data/
-/scripts/demo.py
-
+cuger/light_sim.py
 # C extensions
 *.so
 

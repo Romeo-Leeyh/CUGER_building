@@ -12,7 +12,7 @@ from moosas.MoosasPy import transform
 from moosas.MoosasPy.daylighting import simModel
 user_profile = os.environ['USERPROFILE']
 input = "E:/DATA/Daylighting_test/model/evomass/geo"
-output = "E:/DATA/Daylighting_test/model/evomass/results_moosas"
+output = "E:/DATA/Daylighting_test/model/evomass/results_moosas_0901"
 #input = rf"{user_profile}/AppData/Roaming/SketchUp/SketchUp 2022/SketchUp/Plugins/pkpm_moosas/data/geometry/"
 if not os.path.exists(output):
     os.makedirs(output)

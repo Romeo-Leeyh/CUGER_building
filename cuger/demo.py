@@ -1,5 +1,5 @@
 import os, sys, time
-
+import multiprocessing as mp
 from __transform.convexify import MoosasConvexify
 from __transform.graph import MoosasGraph
 import __transform.process as ps
@@ -10,39 +10,49 @@ if main_dir not in sys.path:
 
 import moosas.MoosasPy as Moosas
 
+
 #main
 user_profile = os.environ['USERPROFILE']
 
 
 _fig_show = True
+
 input = r"//166.111.40.8/protect/moosasTestModelDataset/_cleaned_SRT"
-output = r"E:/DATA/SRT_results"
+output = r"E:/DATA/SRT_results_0"
+
+def run_transform(paths):
+    import moosas.MoosasPy as Moosas
+    Moosas.transform(
+        paths["output_geo_path"],
+        paths["new_idf_path"],
+        paths["new_geo_path"],
+        solve_contains=False,
+        divided_zones=False,
+        break_wall_horizontal=True,
+        solve_redundant=True,
+        attach_shading=False,
+        standardize=True
+    )
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
-    if os.path.exists(paths["new_xml_path"]):
+    if os.path.exists(paths["new_idf_path"]):
         print(f"--Skip-- | {modelname}")
         return
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
-    
+
     try:
-        ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
-
-        Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], 
-                        solve_contains=False, 
-                        divided_zones=False, 
-                        break_wall_horizontal=True, 
-                        solve_redundant=True,
-                        attach_shading=False,
-                        standardize=True)
-
-        ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
-    except ValueError as e:
-        print(f"ValueError: {e} - Modelname: {modelname}")
-    except FileNotFoundError as e:
-        print(f"FileNotFoundError: {e} - Modelname: {modelname}")
+        p = mp.Process(target=run_transform, args=(paths,))
+        p.start()
+        p.join(timeout=300)  # 最长 300 秒
+        if p.is_alive():
+            print(f"超时跳过: {modelname}")
+            p.terminate()
+            p.join()
     except Exception as e:
         print(f"Unexpected error: {e} - Modelname: {modelname}")
+
+
     
     """
     ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])

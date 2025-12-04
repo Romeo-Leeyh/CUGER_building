@@ -26,6 +26,9 @@ for dirpath, dirnames, filenames in os.walk(input):
             basename = os.path.splitext(relative_path)[0].replace('\\', '_')
             output_json_path = os.path.join(output, f"{basename}.json").replace('\\', '/')
 
+            if os.path.exists(output_json_path):
+                print(f"--Skip-- | {filename}")
+                continue
             try:
                 model = transform(input_geo_path, solve_contains=False, divided_zones=False, break_wall_horizontal=True, solve_redundant=True,
                                   attach_shading=False, standardize=True)

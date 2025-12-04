@@ -20,6 +20,7 @@ def get_output_paths(modelname, output_dir):
         "output_json_path": os.path.join(output_dir, "graph", f"{modelname}"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
         "new_geo_path": os.path.join(output_dir, "new_geo", f"{modelname}.geo"),
+        "new_idf_path": os.path.join(output_dir, "new_idf", f"{modelname}.idf"),
         "figure_convex_path": os.path.join(output_dir, "figure_convex", f"{modelname}_convex.png"),
         "figure_graph_path": os.path.join(output_dir, "figure_graph", f"{modelname}_graph.png"),
     }

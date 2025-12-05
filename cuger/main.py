@@ -13,7 +13,6 @@ import moosas.MoosasPy as Moosas
 #main
 user_profile = os.environ['USERPROFILE']
 
-
 _fig_show = True
 input = r"E:/DATA/CUGER_energy_data/geo"
 output = r"E:/DATA/CUGER_energy_data/"

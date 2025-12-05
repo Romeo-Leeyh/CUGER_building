@@ -148,16 +148,17 @@ class Geometry_Option:
     @staticmethod
     def is_same_polygon(polygon1, polygon2, projection=False):
         """
-        判断两个多边形是否相同，可以处理2D投影或3D坐标。
-        允许多边形的点顺序不同，但第一个点固定，其他点可以逆序排列。
+        Determine whether two polygons are identical, supporting 2D projections or full 3D coordinates.
+        The point order is allowed to differ, but the first point is fixed and the remaining points
+        may appear in reversed sequence.
 
         Args:
-            polygon1: numpy array，形状为 (n, 2) 或 (n, 3)
-            polygon2: numpy array，形状需与 polygon1 一致
-            projection: bool，若为 True 则仅比较前两列（xoy投影）
+            polygon1: numpy array of shape (n, 2) or (n, 3)
+            polygon2: numpy array with the same shape as polygon1
+            projection: bool, if True, comparison is performed only on the first two columns (XY projection)
 
         Returns:
-            bool: 是否相同
+            bool: True if the two polygons are identical, False otherwise
         """
         # 确保多边形点数相同
         if polygon1.shape != polygon2.shape:
@@ -188,20 +189,22 @@ class Geometry_Option:
     @staticmethod
     def process_hole(hole, faces, check_projection=True):
         """
-        处理洞的逻辑，判断是否跳过当前 hole。
+        Process the logic for handling holes and decide whether the current hole should be skipped.
 
-        条件：
-        1. hole 与某个 face 三维完全重合
-        2. 若 check_projection 为 True，需额外检查投影是否与其他面不重叠
+        Conditions:
+        1. The hole is exactly coincident with one of the faces in 3D space.
+        2. If check_projection is True, additionally verify that the hole's projection does not
+        overlap with other faces.
 
         Args:
-            hole: numpy array，形状 (n, 3)
-            faces: list[numpy array]，所有面数据
-            check_projection: 是否检查投影重叠
+            hole: numpy array with shape (n, 3)
+            faces: list of numpy arrays representing all faces
+            check_projection: bool, whether to check projection overlap
 
         Returns:
-            bool: 是否跳过该洞
+            bool: True if the hole should be skipped, False otherwise
         """
+
         for other_face in faces:
             # 1. 检查三维完全重合
             if Geometry_Option.is_same_polygon(hole, other_face):
@@ -228,16 +231,18 @@ class Geometry_Option:
     @staticmethod
     def merge_holes(verts_poly: np.ndarray, verts_holes: dict[int, np.ndarray]) -> np.ndarray:
         """
-        为每个洞找到最短的有效连接线。
-        
+        Find the shortest valid connection line for each hole.
+
         Args:
-            verts_poly: 外围多边形顶点坐标
-            verts_holes: 洞顶点坐标字典，key为洞序号
-        
+            verts_poly: coordinates of the outer polygon vertices
+            verts_holes: dictionary of hole vertices, where each key is the hole index
+                        and each value is a numpy array of vertex coordinates
+
         Returns:
             tuple: (indices_all, diagonals)
-                - indices_all: 所有顶点的索引列表
-                - diagonals: 连接线列表，每个元素为(hole_vertex_idx, poly_vertex_idx)
+                - indices_all: a list of all vertex indices after merging
+                - diagonals: a list of connecting edges, each represented as
+                            (hole_vertex_idx, poly_vertex_idx)
         """
         if verts_holes is None or len(verts_holes) == 0:
             return verts_poly, []
@@ -541,20 +546,69 @@ class MoosasConvexify:
     def convexify_faces(cat, idd, normal, faces, holes):
         
         """
-        MAIN FUNCTION FOR CONVEXIFY 非凸多边形优化主函数
-        1. 读取cat分类、idd序号、normal 法线、faces面节点、holes洞节点
-        2. 按照面中节点x+y+z的最小值重排节点起始点，按照法线方向归并所有多边形点序列为逆时针方向
-        3. 针对带洞多边形进行重整
-        4. 多边形凸化，算法This divide-and-conquer methods base on Arkin, Ronald C.'s report (1987).
-            "Path planning for a vision-based autonomous robot"
-        5. 将凸化的分割线链接为四边形，并赋予新分类为空气墙
-        7. 生成新面与旧面的索引关系字典
-        6. 输出合并后的cat分类、idd序号、normal 法线、faces面节点
+        Convexify polygonal faces and generate quadrilateral air-wall patches.
 
-        
+        This function processes a batch of polygonal faces (possibly with holes) 
+        and performs geometric normalization, hole integration, convex decomposition, 
+        and quadrilateral generation. The pipeline follows a divide-and-conquer method 
+        inspired by Arkin (1987), *"Path Planning for a Vision-Based Autonomous Robot"*.
+
+        Parameters
+        ----------
+        cat : list[str]
+            Category ID of each face.
+        idd : list[str]
+            Identifier of each face.
+        normal : list[array-like]
+            Normal vectors of faces.
+        faces : list[list[array-like]]
+            Vertex sequences of each face (outer boundary).
+        holes : list[list[list[array-like]]]
+            Hole vertex sequences for each face (may be empty).
+
+        Workflow
+        --------
+        1. **Vertex ordering**  
+        Vertices of the outer boundary and hole boundaries are reordered 
+        according to the face normal so that all polygons are in a consistent 
+        counter-clockwise orientation.
+
+        2. **Hole merging**  
+        Valid hole polygons are merged into the outer boundary.  
+        Any required merging lines are collected as divide-lines.
+
+        3. **Convex decomposition**  
+        Non-convex faces are split into convex sub-polygons using 
+        a divide-and-conquer algorithm.  
+        Each sub-face inherits its parent category and normal, 
+        with the ID extended as `idd_i` for multi-piece splits.
+
+        4. **Quadrilateral generation (air walls)**  
+        All diagonal split lines from decomposition are connected into 
+        quadrilateral patches. These are assigned:
+        - category `"2"` (air-wall)
+        - auto-generated IDs: `"a_i"`
+
+        Returns
+        -------
+        convex_cat : list[str]
+            Categories of all resulting faces (original + generated quads).
+        convex_idd : list[str]
+            IDs of resulting faces.
+        convex_normal : list[array-like]
+            Normals of resulting faces.
+        convex_faces : list[list[array-like]]
+            Vertex lists of resulting faces.
+        divide_lines : list[array-like]
+            All generated split/merge lines used in decomposition.
+
+        Notes
+        -----
+        - Walls (faces with near-zero Z-normal) are not convexified.
+        - The function guarantees consistent orientation and convexity of outputs.
+        - The quadrilateral air-wall layer can be used for visualization or 
+        topological reconstruction in graph-based pipelines.
         """
-
-
 
         convex_cat = []
         convex_idd = []
@@ -585,7 +639,7 @@ class MoosasConvexify:
                         hole = holes[idx][i]
                         should_skip = Geometry_Option.process_hole(hole, faces, check_projection=True)
                         if should_skip:
-                            continue  # 跳过该 hole
+                            continue  # Skip the hole
                         poly_in[i] = hole
    
                     verts, mergelines = Geometry_Option.merge_holes(poly_ex, poly_in)

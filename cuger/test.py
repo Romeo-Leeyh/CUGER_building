@@ -1,8 +1,8 @@
 import os, sys, time
 
-from cuger.__transform.convexify import MoosasConvexify
-from cuger.__transform.graph import MoosasGraph
-import cuger.__transform.process as ps
+from __transform.convexify import MoosasConvexify
+from __transform.graph import MoosasGraph
+import __transform.process as ps
 
 main_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if main_dir not in sys.path:
@@ -11,8 +11,8 @@ if main_dir not in sys.path:
 import moosas.MoosasPy as Moosas
 # moosas package is independent of cuger, so the import path is moosas.MoosasPy
 
-input = "BuildingConvex/results/examples"
-output = "BuildingConvex/results/example_results"
+input = "BuildingConvex/tests/examples"
+output = "BuildingConvex/tests/example_results"
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)

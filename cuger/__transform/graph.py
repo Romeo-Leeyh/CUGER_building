@@ -249,7 +249,7 @@ class MoosasGraph:
             if int(float(faces_category[i])) == 2:
                 face_params["t"] = "airwall"
 
-            if int(float(faces_category[i])) == 1:
+            if int(float(faces_category[i])) == 1 or 5 or 6:
                 face_params["t"] = "window"
 
             self.graph.add_node(uid, node_type="face", face_params=face_params)

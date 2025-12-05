@@ -11,13 +11,13 @@ from pathlib import Path
 
 def read_geo(file_path):
     """
-    读取.geo文件，返回分类、编号、法向量和多边形面的坐标数组.
+    Reads a .geo file and returns categories, IDs, normal vectors, and polygon face coordinates.
 
     Parameters:
-        file_path (str): 文件路径.
+        file_path (str): File path of the .geo file.
 
     Returns:
-        tuple: 包含分类、编号、法向量和多边形面的信息.
+        tuple: including (cat, idd, normal, faces, holes)
     """
     cat, idd, normal, faces, holes = [], [], [], [], []
 
@@ -89,14 +89,14 @@ def read_geo(file_path):
 
 def write_geo(file_path, cat, idd, normal, faces):
     """
-    将分类、编号、法向量和多边形面的信息写入.geo文件。
+    Write categories, IDs, normal vectors, and polygon face information to a .geo file.
 
     Parameters:
-        output_file_path (str): 输出文件路径.
-        cat (list): 分类列表.
-        idd (list): 编号列表.
-        normal (list): 法向量列表.
-        faces (list): 多边形面信息列表.
+        output_file_path (str): File path of the output .geo file.
+        cat (list): List of categories.
+        idd (list): List of IDs.
+        normal (list): List of normal vectors.
+        faces (list): List of polygon face information.
     """
     try:
         with open(file_path, "w", encoding='utf-8') as f:
@@ -142,7 +142,9 @@ def read_adjson (file_path):
         return None
 
 class NumpyEncoder(json.JSONEncoder):
-    """处理 numpy 数组的 JSON 编码器"""
+    """
+        JSON encoder that handles numpy arrays
+    """
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
@@ -153,11 +155,12 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 def graph_to_json(graph, output_dir):
-    """导出图数据到JSON文件"""
-    # 准备节点数据
+    """
+        Dumps graph data to JSON files
+    """
+    # Prepare node data
     nodes_data = {}
     for node_id, node_attrs in graph.graph.nodes(data=True):
-        # 深拷贝并转换所有numpy数据
         node_data = {}
         for key, value in node_attrs.items():
             if isinstance(value, dict):
@@ -167,7 +170,7 @@ def graph_to_json(graph, output_dir):
                 node_data[key] = value.tolist() if isinstance(value, np.ndarray) else value
         nodes_data[str(node_id)] = node_data
     
-    # 准备边数据
+    # Prepare edge data
     edges_data = {}
     for u, v, edge_attrs in graph.graph.edges(data=True):
         edge_id = f"{u}_{v}"
@@ -177,11 +180,10 @@ def graph_to_json(graph, output_dir):
             "attributes": edge_attrs
         }
     
-    # 确保输出目录存在
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # 写入文件
+    # Write to JSON files
     with open(output_path / "nodes.json", "w", encoding="utf-8") as f:
         json.dump(nodes_data, f, indent=4, cls=NumpyEncoder)
     
@@ -189,42 +191,40 @@ def graph_to_json(graph, output_dir):
         json.dump(edges_data, f, indent=4, cls=NumpyEncoder)
 
 def json_to_graph(input_dir):
-    """从JSON文件读取并重建图数据
+    """Reconstructs graph data from JSON files.
     
     Parameters:
-        input_dir (str): JSON文件所在的目录路径
+        input_dir (str): JSON files directory.
         
     Returns:
-        nx.Graph: 重建的NetworkX图对象
+        nx.Graph: Reconstructed NetworkX graph.
     """
     input_path = Path(input_dir)
     
-    # 读取节点数据
+    # Read node data
     with open(input_path / "nodes.json", "r", encoding="utf-8") as f:
         nodes_data = json.load(f)
     
-    # 读取边数据
+    # Read edge data
     with open(input_path / "edges.json", "r", encoding="utf-8") as f:
         edges_data = json.load(f)
     
-    # 创建新的NetworkX图
+    # Construct the graph
     G = nx.Graph()
     
-    # 添加节点和属性
+    # Add nodes and attributes
     for node_id, node_attrs in nodes_data.items():
-        # 将列表数据转换回numpy数组
+        
         processed_attrs = {}
         for key, value in node_attrs.items():
             if isinstance(value, dict):
-                # 处理嵌套字典
                 processed_attrs[key] = {k: np.array(v) if isinstance(v, list) else v 
                                      for k, v in value.items()}
             else:
-                # 处理普通属性
                 processed_attrs[key] = np.array(value) if isinstance(value, list) else value
         G.add_node(node_id, **processed_attrs)
     
-    # 添加边和属性
+    # Add edges and attributes
     for edge_id, edge_data in edges_data.items():
         source = edge_data["source"]
         target = edge_data["target"]

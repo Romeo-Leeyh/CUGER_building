@@ -17,22 +17,24 @@ user_profile = os.environ['USERPROFILE']
 
 _fig_show = True
 
-input = r"//166.111.40.8/protect/moosasTestModelDataset/_cleaned_SRT"
-output = r"E:/DATA/SRT_results_0"
+input = r"E:/DATA/CUGER_energy_data/geo"
+output = r"E:/DATA/CUGER_energy_data/"
 
 def run_transform(paths):
     import moosas.MoosasPy as Moosas
-    Moosas.transform(
+    model = Moosas.transform(
         paths["output_geo_path"],
-        paths["new_idf_path"],
+        paths["new_xml_path"],
         paths["new_geo_path"],
-        solve_contains=False,
+        solve_overlap=False,
         divided_zones=False,
         break_wall_horizontal=True,
         solve_redundant=True,
         attach_shading=False,
         standardize=True
     )
+    Moosas.saveModel(model, paths["new_rdf_path"])
+
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
@@ -76,4 +78,5 @@ for dirpath, dirnames, filenames in os.walk(input):
             relative_path = os.path.relpath(input_geo_path, input)
             basename = os.path.splitext(relative_path)[0].replace('\\', '_')
             process_file(input_geo_path, basename)
-
+            break
+    break

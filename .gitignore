@@ -5,6 +5,7 @@ __pycache__/
 __temp__/
 data/
 cuger/light_sim.py
+cuger/demo.py
 
 # C extensions
 *.so

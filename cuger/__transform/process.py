@@ -16,11 +16,12 @@ def get_output_paths(modelname, output_dir):
         dict: A dictionary containing paths for various output files.
     """
     paths = {
-        "output_geo_path": os.path.join(output_dir, "geo", f"{modelname}.geo"),
+        "output_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
         "output_json_path": os.path.join(output_dir, "graph", f"{modelname}"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
         "new_geo_path": os.path.join(output_dir, "new_geo", f"{modelname}.geo"),
         "new_idf_path": os.path.join(output_dir, "new_idf", f"{modelname}.idf"),
+        "new_rdf_path": os.path.join(output_dir, "new_rdf", f"{modelname}.owl"),
         "figure_convex_path": os.path.join(output_dir, "figure_convex", f"{modelname}_convex.png"),
         "figure_graph_path": os.path.join(output_dir, "figure_graph", f"{modelname}_graph.png"),
     }

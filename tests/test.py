@@ -9,29 +9,30 @@ if main_dir not in sys.path:
     sys.path.append(main_dir)
 
 import moosas.MoosasPy as Moosas
+# moosas package is independent of cuger, so the import path is moosas.MoosasPy
 
 input = "BuildingConvex/results/examples"
 output = "BuildingConvex/results/example_results"
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
-    if os.path.exists(paths["new_xml_path"]):
-        print(f"--Skip-- | {modelname}")
-        
+
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
 
     try:
         ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
 
-        Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], 
-                        solve_contains=False, 
-                        divided_zones=True, 
+        model = Moosas.transform(input_geo_path, paths["new_xml_path"], paths["new_geo_path"], 
+                        solve_overlap=True, 
+                        divided_zones=False, 
                         break_wall_horizontal=True, 
                         solve_redundant=True,
                         attach_shading=False,
                         standardize=True)
 
+        Moosas.saveModel(model, paths["new_rdf_path"])
+        
         ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
     except ValueError as e:
         print(f"ValueError: {e} - Modelname: {modelname}")

@@ -29,7 +29,8 @@ def process_file(input_geo_path, modelname):
                     attach_shading=False,
                     standardize=True)
 
-    Moosas.saveModel(model, paths["new_rdf_path"])
+    Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+    Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
     
     ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
 

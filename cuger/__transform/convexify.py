@@ -10,23 +10,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 class BasicOptions:
     @staticmethod
     def left_on(p1, p2, p3):
-        """Determine if point p3 is to the left of the line formed by points p1 and p2 in 2D space.
-        
-            Parameters
-            ----------
-            p1 : array-like, shape (N,) or (2,)
-                First point in N-dimensional space; only the first two coordinates are used.
-            p2 : array-like, shape (N,) or (2,)
-                Second point in N-dimensional space; only the first two coordinates are used.
-            p3 : array-like, shape (N,) or (2,)
-                Third point in N-dimensional space; only the first two coordinates are used.
-        
-            Returns
-            -------
-            bool
-                True if p3 is strictly to the left of the directed line from p1 to p2,
-                False otherwise (including collinear or right-side cases).
-        """
 
         p1_2d = p1[:2]
         p2_2d = p2[:2]
@@ -38,29 +21,8 @@ class BasicOptions:
     
     @staticmethod
     def angle(p1, p2, p3):
-        """
-        Calculate the signed angle in degrees between three points in 2D or 3D space.
-        
-        Parameters
-        ----------
-        p1 : array_like
-            First point (tail of the first vector).
-        p2 : array_like
-            Second point (vertex of the angle, shared by both vectors).
-        p3 : array_like
-            Third point (tip of the second vector).
-        
-        Returns
-        -------
-        float
-            The signed angle in degrees between the vectors (p2 - p1) and (p3 - p2). 
-            Positive if the rotation from v1 to v2 is counterclockwise (right-hand rule), 
-            negative if clockwise. Returns 0 if the vectors are colinear or nearly so.
-        """
         v1 = p2 - p1
         v2 = p3 - p2
-        if len(v1) == 2: v1 = np.append(v1, 0)
-        if len(v2) == 2: v2 = np.append(v2, 0)
         cross = np.cross(v1, v2)
         dot = np.dot(v1, v2)
         
@@ -70,95 +32,25 @@ class BasicOptions:
         angle_rad = np.arccos(np.clip(dot/(np.linalg.norm(v1) * np.linalg.norm(v2)), -1.0, 1.0))
         angle_deg = np.degrees(angle_rad)
         
-        if np.isscalar(cross):
-            return angle_deg if cross > 0 else -angle_deg
-        else:
-            return angle_deg if cross[2] > 0 else -angle_deg
+        return angle_deg if cross[2] > 0 else -angle_deg
 
     @staticmethod
     def get_angle_tan(p1, p2, verts_all):
-        """
-        Calculate the angle of the vector between two points using arctangent.
-        
-        Parameters
-        ----------
-        p1 : int
-            Index of the first point in verts_all.
-        p2 : int
-            Index of the second point in verts_all.
-        verts_all : numpy.ndarray
-            Array of vertex coordinates, where each vertex is a row with at least 2D coordinates.
-        
-        Returns
-        -------
-        float
-            The angle in radians between the vector from p1 to p2 and the positive x-axis.
-        """
         vec = verts_all[p2] - verts_all[p1]
         return np.arctan2(vec[1], vec[0])
     
     @staticmethod
     def is_obtuse(v1, v2, v3):
-        """Check if the angle formed by three points is obtuse.
-        
-        Parameters
-        ----------
-        v1 : array-like
-            First point in space.
-        v2 : array-like
-            Second point (vertex of the angle).
-        v3 : array-like
-            Third point in space.
-        
-        Returns
-        -------
-        bool
-            True if the angle at v2 formed by v1, v2, and v3 is greater than 90 degrees, False otherwise.
-        """
         return BasicOptions.angle(v1, v2, v3) > 90
 
     @staticmethod
     def collinear(p1, p2, p3):
-        """
-        Check if three points are approximately collinear.
-        
-        Parameters
-        ----------
-        p1 : numpy.ndarray
-            First point in 2D or 3D space.
-        p2 : numpy.ndarray
-            Second point in 2D or 3D space.
-        p3 : numpy.ndarray
-            Third point in 2D or 3D space.
-        
-        Returns
-        -------
-        bool
-            True if the points are approximately collinear, False otherwise.
-        """
         area = np.cross(p2 - p1, p3 - p2)
         dist = area / (np.dot(p1, p2 - p1) + 1e-6)
         return np.abs(dist) < 1e-3
 
     @staticmethod
     def between(p1, p2, p3):
-        """
-        Check if point p3 lies between points p1 and p2 along one axis in 2D space.
-        
-        Parameters
-        ----------
-        p1 : array-like
-            First 2D point, represented as a sequence of at least two coordinates (x, y).
-        p2 : array-like
-            Second 2D point, represented as a sequence of at least two coordinates (x, y).
-        p3 : array-like
-            Query 2D point, represented as a sequence of at least two coordinates (x, y).
-        
-        Returns
-        -------
-        bool
-            True if p3 lies between p1 and p2 along the x-axis (if x differs) or y-axis (if x is same), False otherwise.
-        """
 
         p1_2d = p1[:2]
         p2_2d = p2[:2]
@@ -170,25 +62,6 @@ class BasicOptions:
 
     @staticmethod
     def intersect(a, b, c, d):
-        """
-        Determine if two line segments intersect in 2D space.
-        
-        Parameters
-        ----------
-        a : array-like
-            The first endpoint of the first line segment, as a 2D point (x, y).
-        b : array-like
-            The second endpoint of the first line segment, as a 2D point (x, y).
-        c : array-like
-            The first endpoint of the second line segment, as a 2D point (x, y).
-        d : array-like
-            The second endpoint of the second line segment, as a 2D point (x, y).
-        
-        Returns
-        -------
-        bool
-            True if the two line segments intersect, False otherwise.
-        """
 
         a_2d = a[:2]
         b_2d = b[:2]
@@ -208,45 +81,7 @@ class BasicOptions:
         
     @staticmethod
     def diagonal(verts: np.ndarray, indices: np.ndarray, ia: int, ib: int) -> bool:
-        """
-        Check if the line segment between two vertices is a valid diagonal in a polygon.
-        
-        Parameters
-        ----------
-        verts : numpy.ndarray
-            Array of vertex coordinates, where each row represents a point in 2D space.
-        indices : numpy.ndarray
-            Array of indices defining the order of vertices in the polygon.
-        ia : int
-            Index of the first vertex in the diagonal.
-        ib : int
-            Index of the second vertex in the diagonal.
-        
-        Returns
-        -------
-        bool
-            True if the segment between verts[ia] and verts[ib] is a valid diagonal; False otherwise.
-        """
         def in_cone(verts: np.ndarray, indices: np.ndarray, ia: int, ib: int) -> bool:
-            """
-            Check whether a given edge is inside the cone formed by a vertex and its neighbors.
-            
-            Parameters
-            ----------
-            verts : numpy.ndarray
-                Array of vertex coordinates, where each vertex is represented by its coordinates.
-            indices : numpy.ndarray
-                Array of indices referencing vertices in `verts`, representing a polygon or cycle.
-            ia : int
-                Index into `indices` for the central vertex of the cone.
-            ib : int
-                Index into `indices` for the vertex to check if it lies within the cone.
-            
-            Returns
-            -------
-            bool
-                True if the vertex `ib` lies within the cone defined by `ia` and its adjacent vertices; False otherwise.
-            """
             # Check whether (ia, ib) is in cone of (ia-, ia, ia+)
             n = len(indices)
             ia_prev = ia - 1 if ia - 1 >= 0 else n - 1
@@ -266,25 +101,6 @@ class BasicOptions:
 
             
         def diagonalie(verts: np.ndarray, indices: np.ndarray, ia: int, ib: int) -> bool:
-            """Check if a diagonal between two vertices lies strictly inside a polygon.
-            
-                Parameters
-                ----------
-                verts : np.ndarray
-                    Array of shape (N, 2) representing the coordinates of the polygon's vertices.
-                indices : np.ndarray
-                    Array of integers representing the indices of vertices forming the polygon boundary.
-                ia : int
-                    Index into `verts` array for the first endpoint of the diagonal.
-                ib : int
-                    Index into `verts` array for the second endpoint of the diagonal.
-            
-                Returns
-                -------
-                bool
-                    True if the diagonal between vertices `ia` and `ib` does not intersect any edge of the polygon 
-                    (except at endpoints) and lies entirely within the polygon; False otherwise.
-            """
             n = len(indices)
             for now_i in range(n):
                 # exclude edges contains point a and point b
@@ -308,82 +124,49 @@ class BasicOptions:
 class Geometry_Option:
     @staticmethod
     def reorder_vertices(face, is_upward):
+        """Re-order vertices of a face to make the normal face upward or downward.
+        
+        Args:
+            face: numpy array, shape=(n, 3), sequence of vertices of a face
+            is_upward: bool，True for upward, False for downward
+        
+        Returns:
+            reordered_face: numpy array, shape=(n, 3)
         """
-        Re-order vertices of a face to ensure counter-clockwise order in top view (XY plane projection).
+        # calculate the sum of x, y, z of each vertex
+        sum_xyz = np.sum(face, axis=1)
+        min_index = np.argmin(sum_xyz)
         
-        This function forces all vertices to be arranged in counter-clockwise order when viewed from above,
-        regardless of the face normal direction. This replaces the previous right-hand rule approach.
-        
-        Parameters
-        ----------
-        face : numpy.ndarray
-            Array of shape (n, 3) representing the sequence of vertices of a face.
-        is_upward : bool
-            Kept for backward compatibility but no longer affects the ordering logic.
-            All faces are now forced to counter-clockwise order in top view.
-        
-        Returns
-        -------
-        reordered_face : numpy.ndarray
-            Array of shape (n, 3) with vertices reordered to counter-clockwise in top view.
-        """
-        # Project vertices to XY plane (top view) by ignoring Z coordinate
-        vertices_2d = face[:, :2]  # Extract only X and Y coordinates
-        
-        # Calculate signed area using the shoelace formula (cross product sum)
-        # Positive area = counter-clockwise, Negative area = clockwise
-        n = len(vertices_2d)
-        signed_area = 0.0
-        for i in range(n):
-            x1, y1 = vertices_2d[i]
-            x2, y2 = vertices_2d[(i + 1) % n]
-            signed_area += (x1 * y2 - x2 * y1)
-        
-        # If signed area is negative, vertices are in clockwise order
-        # Reverse the order to make them counter-clockwise
-        if signed_area < 0:
-            face = face[::-1]
-        
+        # reorder the vertices based on the minimum index
+        if is_upward:
+            face = np.roll(face, -min_index, axis=0)
+        else:
+            face = np.roll(face, -min_index + face.shape[0] - 1, axis=0)[::-1]
+            
         return face
 
     @staticmethod
     def is_same_polygon(polygon1, polygon2, projection=False):
         """
-        Check if two polygons are the same, with support for 2D projection or 3D coordinates.
-        
-        Parameters
-        ----------
-        polygon1 : numpy.ndarray
-            A numpy array of shape (n, 2) or (n, 3) representing the first polygon.
-        polygon2 : numpy.ndarray
-            A numpy array of the same shape as polygon1 representing the second polygon.
-        projection : bool
-            If True, only the first two columns (x, y) are compared (projection on xoy plane).
-        
-        Returns
-        -------
-        bool
-            True if the polygons are the same, considering point order and reverse order (with fixed first point), otherwise False.
-        """
-        """
-        Determine if two polygons are the same, supporting 2D projection or 3D coordinates.
-        Allows different vertex orders, but the first point is fixed and other points can be in reverse order.
+        Determine whether two polygons are identical, supporting 2D projections or full 3D coordinates.
+        The point order is allowed to differ, but the first point is fixed and the remaining points
+        may appear in reversed sequence.
 
         Args:
-            polygon1: numpy array, shape (n, 2) or (n, 3)
-            polygon2: numpy array, shape must be consistent with polygon1
-            projection: bool, if True only compare the first two columns (xoy projection)
+            polygon1: numpy array of shape (n, 2) or (n, 3)
+            polygon2: numpy array with the same shape as polygon1
+            projection: bool, if True, comparison is performed only on the first two columns (XY projection)
 
         Returns:
-            bool: whether the polygons are the same
+            bool: True if the two polygons are identical, False otherwise
         """
-        # Ensure polygon vertex counts are the same
+        # 确保多边形点数相同
         if polygon1.shape != polygon2.shape:
             return False
 
-        # Extract coordinates to compare
+        # 提取需要比较的坐标
         if projection:
-            # Ensure at least two coordinates
+            # 确保至少有两个坐标
             if polygon1.shape[1] < 2 or polygon2.shape[1] < 2:
                 return False
             poly1 = polygon1[:, :2]
@@ -392,112 +175,54 @@ class Geometry_Option:
             poly1 = polygon1
             poly2 = polygon2
 
-        # Directly identical
+        # 直接相同
         if np.array_equal(poly1, poly2):
             return True
 
-        # First point is the same, other points in reverse order
+        # 第一个点相同，其他点逆序
         if np.array_equal(poly1[0], poly2[0]) and np.array_equal(poly1[1:], poly2[1:][::-1]):
             return True
 
         return False
-    
-    def is_valid_face(vertices, area_eps=1e-8):
-        """
-        Check whether a 3D polygon face is geometrically valid.
 
-        Parameters
-        ----------
-        vertices : list or np.ndarray, shape (N, 3)
-            Vertices of the polygon.
-        area_eps : float
-            Area threshold below which the face is considered degenerate.
 
-        Returns
-        -------
-        bool
-            True if face is valid, False otherwise.
-        """
-
-        # 1. Vertex count
-        if vertices is None or len(vertices) < 3:
-            return False
-
-        v = np.asarray(vertices, dtype=float)
-
-        # 2. Finite check
-        if not np.isfinite(v).all():
-            return False
-
-        # 3. Area check (fan triangulation)
-        p0 = v[0]
-        area = 0.0
-
-        for i in range(1, len(v) - 1):
-            e1 = v[i]     - p0
-            e2 = v[i + 1] - p0
-            area += 0.5 * np.linalg.norm(np.cross(e1, e2))
-
-        if area <= area_eps:
-            return False
-
-        return True
-
-    
     @staticmethod
     def process_hole(hole, faces, check_projection=True):
         """
-        Process a hole to determine if it should be skipped based on geometric conditions.
-        
-        Parameters
-        ----------
-        hole : numpy.ndarray
-            A 2D array of shape (n, 3) representing the 3D coordinates of the hole polygon.
-        faces : list of numpy.ndarray
-            A list of 2D arrays, each representing a 3D face polygon with shape (m, 3).
-        check_projection : bool, optional
-            If True, checks whether the projection of the hole overlaps with projections of other faces.
-            Default is True.
-        
-        Returns
-        -------
-        bool
-            True if the hole should be skipped (i.e., it fully coincides with a face and meets projection criteria),
-            False otherwise.
-        """
-        """
-        Logic to process a hole and determine if it should be skipped.
+        Process the logic for handling holes and decide whether the current hole should be skipped.
 
         Conditions:
-        1. Hole completely coincides with a face in 3D
-        2. If check_projection is True, additionally check if projection does not overlap with other faces
+        1. The hole is exactly coincident with one of the faces in 3D space.
+        2. If check_projection is True, additionally verify that the hole's projection does not
+        overlap with other faces.
 
         Args:
-            hole: numpy array, shape (n, 3)
-            faces: list[numpy array], all face data
-            check_projection: whether to check projection overlap
+            hole: numpy array with shape (n, 3)
+            faces: list of numpy arrays representing all faces
+            check_projection: bool, whether to check projection overlap
 
         Returns:
-            bool: whether to skip this hole
+            bool: True if the hole should be skipped, False otherwise
         """
+
         for other_face in faces:
-            # 1. Check for complete 3D coincidence
+            # 1. 检查三维完全重合
             if Geometry_Option.is_same_polygon(hole, other_face):
                 if not check_projection:
-                    return True  # Skip directly
+                    return True  # 直接跳过
                 
-                # 2. Check if projection overlaps with other faces (excluding itself)
+                # 2. 检查投影是否与其他面重叠（排除自己）
                 has_projection_overlap = False
                 for face in faces:
                     if Geometry_Option.is_same_polygon(hole, face):
-                        continue  # Skip itself
+                        continue  # 跳过自身
                     
-                    # Check if projections are the same (allowing reverse order)
+                    # 检查投影是否相同（允许逆序）
                     if Geometry_Option.is_same_polygon(hole, face, projection=True):
                         has_projection_overlap = True
                         break
                 
-                # If no other face projection overlaps, skip this hole
+                # 如果没有其他面投影重叠，则跳过该洞
                 if not has_projection_overlap:
                     return True
         
@@ -506,46 +231,29 @@ class Geometry_Option:
     @staticmethod
     def merge_holes(verts_poly: np.ndarray, verts_holes: dict[int, np.ndarray]) -> np.ndarray:
         """
-        Merge holes into a polygon by finding the shortest valid connection lines.
-        
-        Parameters
-        ----------
-        verts_poly : np.ndarray
-            Array of vertices representing the outer polygon boundary.
-        verts_holes : dict[int, np.ndarray]
-            Dictionary mapping hole indices to their respective vertex arrays; each key is an integer 
-            identifying a hole, and the corresponding value is a NumPy array of its vertices.
-        
-        Returns
-        -------
-        tuple[np.ndarray, list[np.ndarray]]
-            A tuple containing:
-            - indices_all: Array of merged vertices including both polygon and hole vertices in traversal order.
-            - diagonals: List of connection line segments represented as arrays of two points, 
-              each connecting a polygon vertex to a hole vertex.
-        """
-        """
         Find the shortest valid connection line for each hole.
-        
+
         Args:
-            verts_poly: outer polygon vertex coordinates
-            verts_holes: dictionary of hole vertex coordinates, key is hole index
-        
+            verts_poly: coordinates of the outer polygon vertices
+            verts_holes: dictionary of hole vertices, where each key is the hole index
+                        and each value is a numpy array of vertex coordinates
+
         Returns:
             tuple: (indices_all, diagonals)
-                - indices_all: list of all vertex indices
-                - diagonals: list of connection lines, each element is (hole_vertex_idx, poly_vertex_idx)
+                - indices_all: a list of all vertex indices after merging
+                - diagonals: a list of connecting edges, each represented as
+                            (hole_vertex_idx, poly_vertex_idx)
         """
         if verts_holes is None or len(verts_holes) == 0:
             return verts_poly, []
         
-        n_poly = len(verts_poly)  # Number of outer polygon vertices
+        n_poly = len(verts_poly)  # 外围多边形顶点数
         indices_poly = list(range(n_poly))
         indices_holes = {}
         verts_all = verts_poly.copy()
         indices_all = indices_poly.copy()
 
-        # Calculate vertex indices for all holes
+        # 计算所有洞的顶点索引
         offset = n_poly
         for hole_id, verts_hole in verts_holes.items():
             n_hole = len(verts_hole)
@@ -554,24 +262,24 @@ class Geometry_Option:
             indices_all.extend(range(offset, offset + n_hole))
             offset += n_hole
 
-        best_diagonals = {}  # Store the best connection for each hole
+        best_diagonals = {}  # 存储每个洞的最佳连接
 
-        # Iterate through each hole
+        # 遍历每个洞
         for hole_id, indices_hole in indices_holes.items():
             verts_hole = verts_holes[hole_id]
             n_hole = len(indices_hole)
             min_diagonal_length = float('inf')
             min_diagonal = None
 
-            # Iterate through all vertices of current hole
+            # 遍历当前洞的所有顶点
             for hole_idx, hole_vert_idx in enumerate(indices_hole):
-                hole_vertex = verts_hole[hole_idx]  # Use hole_idx instead of hole_vert_idx
-                # Check connection with outer polygon vertices
+                hole_vertex = verts_hole[hole_idx]  # 使用hole_idx而不是hole_vert_idx
+                # 检查与外围多边形顶点的连接
                 for poly_idx, poly_vertex_idx in enumerate(indices_poly):
                     poly_vertex = verts_poly[poly_idx]
                     okay = True
                     
-                    # Check intersection with outer polygon edges
+                    # 检查与外围多边形边的交线
                     for poly_edge in range(n_poly):
                         poly_a = verts_poly[poly_edge]
                         poly_b = verts_poly[(poly_edge + 1) % n_poly]
@@ -584,7 +292,7 @@ class Geometry_Option:
                     if not okay:
                         continue
                         
-                    # Check intersection with current hole edges
+                    # 检查与当前洞边的交线
                     for hole_edge in range(n_hole):
                         hole_a = verts_hole[hole_edge]
                         hole_b = verts_hole[(hole_edge + 1) % n_hole]
@@ -597,7 +305,7 @@ class Geometry_Option:
                     if not okay:
                         continue
                         
-                    # Check intersection with other holes
+                    # 检查与其他洞的交线
                     for other_id, other_indices in indices_holes.items():
                         if other_id == hole_id:
                             continue
@@ -612,7 +320,7 @@ class Geometry_Option:
                             break
                     
                     if okay:
-                        # Calculate diagonal length
+                        # 计算对角线长度
                         diagonal_length = np.linalg.norm(poly_vertex - hole_vertex)
                         if diagonal_length < min_diagonal_length:
                             min_diagonal_length = diagonal_length
@@ -621,23 +329,23 @@ class Geometry_Option:
             if min_diagonal is not None:
                 best_diagonals[hole_id] = min_diagonal
 
-        # Build connection line list
+        # 构建连接线列表
         diagonals = []
         
         for hole_id, (p_idx, h_idx) in best_diagonals.items():
             diagonals.append((p_idx, h_idx))
         diagonals = sorted(diagonals, key=lambda x: (x[0], -BasicOptions.get_angle_tan(x[0], x[1], verts_all)))
 
-        # Build new vertex list
+        # 构建新的顶点列表
         verts = []
         for idx in indices_poly:
             verts.append(verts_all[idx])
             
-            # Check if there are connection lines starting from current vertex
+            # 检查是否有从当前顶点出发的连线
             for diagonal in diagonals:
                 if diagonal[0] == idx:
                     hole_vertex = diagonal[1]
-                    # Find which hole this hole vertex belongs to
+                    # 找出这个洞顶点属于哪个洞
                     target_hole_id = None
                     target_hole_indices = None
                     for hole_id, hole_indices in indices_holes.items():
@@ -647,14 +355,14 @@ class Geometry_Option:
                             break
                     
                     if target_hole_indices:
-                        # Traverse hole vertices starting from connection endpoint
+                        # 从连线端点开始遍历洞的顶点
                         start_idx = target_hole_indices.index(hole_vertex)
                         n_hole = len(target_hole_indices)
-                        # Add hole vertices in order
-                        for i in range(n_hole + 1):  # +1 is to return to the starting point
+                        # 按顺序添加洞的顶点
+                        for i in range(n_hole + 1):  # +1 是为了回到起点
                             current_idx = target_hole_indices[(start_idx + i) % n_hole]
                             verts.append(verts_all[current_idx])
-                        # Add current outer vertex again to close
+                        # 再次添加当前外围顶点以闭合
                         verts.append(verts_all[idx])
         
         mergelines = [np.array([verts_all[pair[0]], verts_all[pair[1]]]) for pair in diagonals]
@@ -663,25 +371,6 @@ class Geometry_Option:
     
     @staticmethod
     def split_poly(verts: np.ndarray, indices: np.ndarray) -> Union[List[np.ndarray], List[Tuple[int, int]]]:
-        """
-        Split a simple polygon into convex polygons using a divide-and-conquer approach.
-        
-        Parameters
-        ----------
-        verts : np.ndarray
-            Array of shape (#verts, 2) containing the 2D coordinates of vertices.
-        indices : np.ndarray
-            Array of shape (#verts,) containing the indices of vertices forming the polygon, 
-            referencing rows in `verts`.
-        
-        Returns
-        -------
-        list of np.ndarray, list of tuple of int
-            A tuple containing two elements:
-            - A list of arrays, each array containing indices of `verts` that form a convex polygon.
-            - A list of tuples, each tuple representing a diagonal (split edge) by vertex indices 
-              used to partition the original polygon.
-        """
         """
         Turn a simple polygon into a list of convex polygons that shares the same area.
         This divide-and-conquer methods base on Arkin, Ronald C.'s report (1987).
@@ -780,22 +469,6 @@ class Geometry_Option:
         """
         Split a convex polygon into triangles or convex quadrilaterals without obtuse angles.
         
-        Parameters
-        ----------
-        verts : np.ndarray, shape (N, 2)
-            Array of 2D vertex positions, where N is the number of vertices.
-        indices : np.ndarray, shape (M,)
-            Array of indices referring to vertices in `verts` that form the convex polygon.
-        
-        Returns
-        -------
-        list of np.ndarray or list of tuple of int
-            List of sub-polygons, each represented as an array (or tuple) of vertex indices;
-            each sub-polygon is either a triangle or a convex quadrilateral.
-        """
-        """
-        Split a convex polygon into triangles or convex quadrilaterals without obtuse angles.
-        
         :param verts: np.ndarray (#verts, 2) - a list of 2D vertices positions
         :param indices: np.ndarray (#verts,) - a list of polygon vertex indices (referring to the array `verts`)
         :return: List of np.ndarray - each sub-array corresponds to the indices of a triangle or quadrilateral
@@ -821,371 +494,56 @@ class Geometry_Option:
         
         return polygons
 
+class MoosasConvexify:  
 
-class FaceValidationUtils:
-    """Utility class for face validation and processing logic."""
+    def create_quadrilaterals(divide_lines):
+        line_groups = defaultdict(list)
+        quad_faces = []
+        quad_normals = []
+
+        # Get the projection coordinates and midpoint heights
+        projected_lines = [line[:, :2] for line in divide_lines]
+        z_lines = [(line[0, 2] + line[1, 2]) / 2 for line in divide_lines]
+
+        # Group overlapping lines
+        for i in range(len(projected_lines)):
+            found_group = False
+            for j in range(i):
+                if (np.array_equal(projected_lines[i], projected_lines[j]) or 
+                    np.array_equal(projected_lines[i], projected_lines[j][::-1])):
+                    line_groups[j].append((divide_lines[i], z_lines[i]))
+                    found_group = True
+                    break
+            if not found_group:
+                line_groups[i].append((divide_lines[i], z_lines[i]))
+
+        # Process each group to form quadrilaterals
+        for group in line_groups.values():
+            if len(group) < 2:
+                continue  # Skip groups with fewer than 2 lines
+
+            # Sort lines in the group by midpoint height
+            group.sort(key=lambda x: x[1])  # Sort by z value
+
+            # Create quadrilaterals
+            for k in range(len(group) - 1):
+                line1, _ = group[k]
+                line2, _ = group[k + 1]
+
+                # Skip if the two lines are geometrically identical (same endpoints)
+                if (np.allclose(line1, line2) or np.allclose(line1, line2[::-1])):
+                    continue
+
+                quad_face = np.array([line1[0], line1[1], line2[1], line2[0]])
+                normal_vector = np.cross(line1[0] - line1[1], line1[0] - line2[0])
+                quad_normal = normal_vector / np.linalg.norm(normal_vector)
+
+                quad_faces.append(quad_face)
+                quad_normals.append(quad_normal)
+
+        return quad_faces, quad_normals
     
-    @staticmethod
-    def validate_face(face, is_valid_face=True, is_quad_clean=False, expected_quad_vertices=None):
-        """
-        Validate a single face based on validation flags.
-        
-        Parameters
-        ----------
-        face : list or numpy.ndarray
-            Face vertices to validate.
-        is_valid_face : bool, optional
-            If True, validate face using Geometry_Option.is_valid_face().
-            Default is True.
-        is_quad_clean : bool, optional
-            If True, apply additional quadrilateral validation.
-            Default is False.
-        expected_quad_vertices : int, optional
-            Expected number of vertices for quadrilateral validation.
-            Default is None (no check).
-        
-        Returns
-        -------
-        bool
-            True if face passes all validation checks, False otherwise.
-        """
-        # Basic validity check
-        if is_valid_face:
-            if not Geometry_Option.is_valid_face(face):
-                return False
-        
-        # Quadrilateral-specific validation
-        if is_quad_clean and expected_quad_vertices is not None:
-            if len(face) != expected_quad_vertices:
-                return False
-        
-        return True
-    
-    @staticmethod
-    def add_face_to_output(face, cat_value, idd_value, normal_value, 
-                          convex_cat, convex_idd, convex_normal, convex_faces):
-        """
-        Add a validated face to output lists.
-        
-        Parameters
-        ----------
-        face : list or numpy.ndarray
-            Face vertices.
-        cat_value : str
-            Category value.
-        idd_value : str
-            ID value.
-        normal_value : array-like
-            Normal vector.
-        convex_cat : list
-            Output category list.
-        convex_idd : list
-            Output ID list.
-        convex_normal : list
-            Output normal list.
-        convex_faces : list
-            Output face list.
-        """
-        convex_cat.append(cat_value)
-        convex_idd.append(idd_value)
-        convex_normal.append(normal_value)
-        convex_faces.append(face)
-    
-    @staticmethod
-    def process_filtered_faces(filtered_faces, cat_idx, idd_base, normal_idx,
-                              cat, idd, normal, convex_cat, convex_idd, 
-                              convex_normal, convex_faces, is_valid_face=True, 
-                              is_quad_clean=False, use_indexed_idd=False):
-        """
-        Process a list of filtered faces and add them to output.
-        
-        Parameters
-        ----------
-        filtered_faces : list
-            List of filtered face vertices.
-        cat_idx : int
-            Index in cat list.
-        idd_base : str
-            Base ID string.
-        normal_idx : int
-            Index in normal list.
-        cat : list
-            Input category list.
-        idd : list
-            Input ID list.
-        normal : list
-            Input normal list.
-        convex_cat : list
-            Output category list.
-        convex_idd : list
-            Output ID list.
-        convex_normal : list
-            Output normal list.
-        convex_faces : list
-            Output face list.
-        is_valid_face : bool, optional
-            Enable face validity validation. Default is True.
-        is_quad_clean : bool, optional
-            Enable quadrilateral validation. Default is False.
-        use_indexed_idd : bool, optional
-            If True, append index to ID (e.g., "id_0", "id_1").
-            Default is False.
-        
-        Returns
-        -------
-        int
-            Number of faces successfully added.
-        """
-        count = 0
-        for i, face in enumerate(filtered_faces):
-            # Validate face
-            if not FaceValidationUtils.validate_face(face, is_valid_face, is_quad_clean):
-                continue
-            
-            # Prepare ID
-            if use_indexed_idd:
-                face_idd = f"#{idd[idd_base]}_{i}"
-            else:
-                face_idd = idd[idd_base]
-            
-            # Add to output
-            FaceValidationUtils.add_face_to_output(
-                face, cat[cat_idx], face_idd, normal[normal_idx],
-                convex_cat, convex_idd, convex_normal, convex_faces
-            )
-            count += 1
-        
-        return count
-
-
-
-    @staticmethod
-    def process_convex_decomposition_faces(polys, verts, idx, cat, idd, normal,
-                                          convex_cat, convex_idd, convex_normal, 
-                                          convex_faces, is_valid_face=True, 
-                                          is_quad_clean=False):
-        """
-        Process faces resulting from convex decomposition.
-        
-        Parameters
-        ----------
-        polys : list
-            List of polygon indices from decomposition.
-        verts : numpy.ndarray
-            Vertex array.
-        idx : int
-            Current face index.
-        cat : list
-            Input category list.
-        idd : list
-            Input ID list.
-        normal : list
-            Input normal list.
-        convex_cat : list
-            Output category list.
-        convex_idd : list
-            Output ID list.
-        convex_normal : list
-            Output normal list.
-        convex_faces : list
-            Output face list.
-        is_valid_face : bool, optional
-            Enable face validity validation. Default is True.
-        is_quad_clean : bool, optional
-            Enable quadrilateral validation. Default is False.
-        
-        Returns
-        -------
-        int
-            Number of faces successfully added.
-        """
-        # Extract subfaces from polygon indices
-        subfaces = [verts[poly] for poly in polys]
-        
-        # Apply face node filtering
-        filtered_subfaces = FaceFilterAndQuadrilateral.filter_and_process_faces(subfaces)
-        
-        # Process filtered faces
-        use_indexed = len(filtered_subfaces) > 1
-        return FaceValidationUtils.process_filtered_faces(
-            filtered_subfaces, idx, idx, idx,
-            cat, idd, normal, convex_cat, convex_idd, convex_normal, convex_faces,
-            is_valid_face=is_valid_face, is_quad_clean=is_quad_clean,
-            use_indexed_idd=use_indexed
-        )
-    
-    @staticmethod
-    def process_quadrilateral_faces(quad_faces, quad_normals, convex_cat, convex_idd,
-                                   convex_normal, convex_faces, is_valid_face=True,
-                                   is_quad_clean=True):
-        """
-        Process quadrilateral air-wall faces with validation.
-        
-        Parameters
-        ----------
-        quad_faces : list
-            List of quadrilateral face vertices.
-        quad_normals : list
-            List of quadrilateral normals.
-        convex_cat : list
-            Output category list.
-        convex_idd : list
-            Output ID list.
-        convex_normal : list
-            Output normal list.
-        convex_faces : list
-            Output face list.
-        is_valid_face : bool, optional
-            Enable face validity validation. Default is True.
-        is_quad_clean : bool, optional
-            Enable quadrilateral validation. Default is True.
-        
-        Returns
-        -------
-        int
-            Number of quadrilateral faces successfully added.
-        """
-        count = 0
-        for i, face in enumerate(quad_faces):
-            # Apply quadrilateral-specific validation
-            if not FaceValidationUtils.validate_face(
-                face, is_valid_face=is_valid_face, 
-                is_quad_clean=is_quad_clean, expected_quad_vertices=4
-            ):
-                continue
-            
-            # Add to output
-            FaceValidationUtils.add_face_to_output(
-                face, "2", f"a_{i}", quad_normals[i],
-                convex_cat, convex_idd, convex_normal, convex_faces
-            )
-            count += 1
-        
-        return count
-
-class FaceFilterAndQuadrilateral:
-    """Utility class for filtering faces by node count and computing maximum inscribed quadrilaterals."""
-    
-    @staticmethod
-    def polygon_area_2d(vertices):
-        """
-        Calculate the area of a 2D polygon using the shoelace formula.
-        
-        Parameters
-        ----------
-        vertices : list or numpy.ndarray
-            List of 2D vertices (x, y) forming a polygon.
-        
-        Returns
-        -------
-        float
-            The area of the polygon.
-        """
-        if len(vertices) < 3:
-            return 0.0
-        
-        area = 0.0
-        n = len(vertices)
-        for i in range(n):
-            x1, y1 = vertices[i][:2]
-            x2, y2 = vertices[(i + 1) % n][:2]
-            area += x1 * y2 - x2 * y1
-        
-        return abs(area) / 2.0
-    
-    @staticmethod
-    def compute_max_inscribed_quadrilateral(vertices):
-        """
-        Compute the maximum area inscribed quadrilateral from a convex polygon.
-        
-        The inscribed quadrilateral has all four vertices selected from the polygon's vertices.
-        This function uses a brute-force approach to find the quadrilateral with maximum area.
-        
-        Parameters
-        ----------
-        vertices : list or numpy.ndarray
-            List of vertices of a convex polygon, ordered counter-clockwise.
-        
-        Returns
-        -------
-        list
-            List of four vertices forming the maximum area inscribed quadrilateral,
-            or the original vertices if fewer than 4 vertices exist.
-        """
-        n = len(vertices)
-        
-        # If polygon has 4 or fewer vertices, return as is
-        if n <= 4:
-            return vertices
-        
-        max_area = 0.0
-        best_quad_indices = None
-        
-        # Brute-force search through all combinations of 4 vertices
-        for i in range(n):
-            for j in range(i + 1, n):
-                for k in range(j + 1, n):
-                    for l in range(k + 1, n):
-                        # Create quadrilateral from selected vertex indices
-                        quad_vertices = [vertices[i], vertices[j], vertices[k], vertices[l]]
-                        
-                        # Calculate area of this quadrilateral
-                        area = FaceFilterAndQuadrilateral.polygon_area_2d(quad_vertices)
-                        
-                        # Update best quadrilateral if this one has larger area
-                        if area > max_area:
-                            max_area = area
-                            best_quad_indices = [i, j, k, l]
-        
-        # Return the best inscribed quadrilateral found
-        if best_quad_indices is not None:
-            return [vertices[idx] for idx in best_quad_indices]
-        else:
-            return vertices
-    
-    @staticmethod
-    def filter_and_process_faces(faces):
-        """
-        Filter faces by node count and process them according to the following rules:
-        - Discard faces with fewer than 3 vertices
-        - Keep faces with 3 or 4 vertices as-is
-        - For faces with more than 4 vertices, compute the maximum inscribed quadrilateral
-        
-        Parameters
-        ----------
-        faces : list[list[array-like]]
-            List of face vertex lists.
-        
-        Returns
-        -------
-        list[list[array-like]]
-            Processed faces meeting the filtering criteria.
-        """
-        processed_faces = []
-        
-        for face in faces:
-            num_vertices = len(face)
-            
-            # Discard faces with fewer than 3 vertices
-            if num_vertices < 3:
-                continue
-            
-            # Keep faces with 3 or 4 vertices as-is
-            elif num_vertices <= 4:
-                processed_faces.append(face)
-            
-            # For faces with more than 4 vertices, compute maximum inscribed quadrilateral
-            else:
-                max_quad = FaceFilterAndQuadrilateral.compute_max_inscribed_quadrilateral(face)
-                processed_faces.append(max_quad)
-        
-        return processed_faces
-
-
-
-class MoosasConvexify:
-    @staticmethod
-    def convexify_faces(cat, idd, normal, faces, holes, is_valid_face=True, is_quad_clean=False):
+    def convexify_faces(cat, idd, normal, faces, holes):
         
         """
         Convexify polygonal faces and generate quadrilateral air-wall patches.
@@ -1207,12 +565,6 @@ class MoosasConvexify:
             Vertex sequences of each face (outer boundary).
         holes : list[list[list[array-like]]]
             Hole vertex sequences for each face (may be empty).
-        is_valid_face : bool, optional
-            If True, validates each output face using Geometry_Option.is_valid_face().
-            Default is True.
-        is_quad_clean : bool, optional
-            If True, applies additional validation to quadrilateral faces (air walls).
-            Default is True.
 
         Workflow
         --------
@@ -1231,13 +583,7 @@ class MoosasConvexify:
         Each sub-face inherits its parent category and normal, 
         with the ID extended as `idd_i` for multi-piece splits.
 
-        4. **Face node filtering**
-        Faces are filtered and processed based on node count:
-        - Faces with fewer than 3 nodes are discarded.
-        - Faces with 3 or 4 nodes are kept as-is.
-        - Faces with more than 4 nodes are replaced with the maximum inscribed quadrilateral.
-
-        5. **Quadrilateral generation (air walls)**  
+        4. **Quadrilateral generation (air walls)**  
         All diagonal split lines from decomposition are connected into 
         quadrilateral patches. These are assigned:
         - category `"2"` (air-wall)
@@ -1262,7 +608,6 @@ class MoosasConvexify:
         - The function guarantees consistent orientation and convexity of outputs.
         - The quadrilateral air-wall layer can be used for visualization or 
         topological reconstruction in graph-based pipelines.
-        - Face node filtering ensures output faces have at most 4 vertices.
         """
 
         convex_cat = []
@@ -1277,12 +622,9 @@ class MoosasConvexify:
             
             is_upward = normal[idx][2] > 0
             faces[idx] = Geometry_Option.reorder_vertices(faces[idx], is_upward=is_upward)
-            
             if holes[idx]:
                 for i in range(len(holes[idx])):
                     holes[idx][i] = Geometry_Option.reorder_vertices(holes[idx][i], is_upward=is_upward)
-                    print (f"face[{idx}]:{faces[idx]}")
-                    print (f"hole[{idx}][{i}]:{holes[idx][i]}")
         
         print ("--Faces reodering done--")
 
@@ -1308,46 +650,48 @@ class MoosasConvexify:
                 else:
                     verts = poly_ex
 
-                # Convex decomposition and face processing
+                # Convexification
                 indices = list(range(len(verts)))
+
                 polys, diags = Geometry_Option.split_poly(verts, indices)
                 
-                # Process decomposed faces using utility method
-                FaceValidationUtils.process_convex_decomposition_faces(
-                    polys, verts, idx, cat, idd, normal,
-                    convex_cat, convex_idd, convex_normal, convex_faces,
-                    is_valid_face=is_valid_face, is_quad_clean=is_quad_clean
-                )
+                subfaces = [verts[poly] for poly in polys]
                 
-                # Collect dividing lines
-                if diags:
-                    sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
-                    divide_lines.extend(sublines)
+                if len(subfaces) == 1:
+                    for i, subface in enumerate(subfaces):
+                        convex_cat.append(cat[idx])
+                        convex_idd.append(idd[idx])
+                        convex_normal.append(normal[idx])
+                        convex_faces.append(subface)
+                else:
+                    for i, subface in enumerate(subfaces):
+                        convex_cat.append(cat[idx])
+                        convex_idd.append(f"#{idd[idx]}_{i}")
+                        convex_normal.append(normal[idx])
+                        convex_faces.append(subface)
+                    
+                    if diags:
+                        sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
+                        divide_lines.extend(sublines)
 
             else:
-                # For wall faces, apply node filtering and validation
-                filtered_wall_faces = FaceFilterAndQuadrilateral.filter_and_process_faces([face])
-                
-                # Process wall faces using utility method
-                FaceValidationUtils.process_filtered_faces(
-                    filtered_wall_faces, idx, idx, idx,
-                    cat, idd, normal, convex_cat, convex_idd, convex_normal, convex_faces,
-                    is_valid_face=is_valid_face, is_quad_clean=is_quad_clean,
-                    use_indexed_idd=False
-                )
+                convex_cat.append(cat[idx])
+                convex_idd.append(idd[idx])
+                convex_normal.append(normal[idx])
+                convex_faces.append(face)
         
         print ("--Faces splitting done--")
 
         quad_faces, quad_normals = MoosasConvexify.create_quadrilaterals(divide_lines)
         
-        # Process quadrilateral air-wall faces using utility method
-        FaceValidationUtils.process_quadrilateral_faces(
-            quad_faces, quad_normals, convex_cat, convex_idd,
-            convex_normal, convex_faces, is_valid_face=is_valid_face,
-            is_quad_clean=is_quad_clean
-        )
+        for i,face in enumerate(quad_faces):
+            convex_cat.append("2")   # new category for air wall 
+            convex_idd.append(f"a_{i}")
+            convex_normal.append(quad_normals[i])
+            convex_faces.append(face)
 
         return convex_cat, convex_idd, convex_normal, convex_faces, divide_lines
+
 
 
     def plot_faces(faces, lines, file_path, _fig_show =False):

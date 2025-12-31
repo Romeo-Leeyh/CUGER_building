@@ -240,10 +240,6 @@ class MoosasGraph:
                 "s": obb_params['scale'], # 3D scale of the OBB
                 "r": obb_params['rotation'], # 3x3 rotation matrix
                 "t": None, # face type: floor, wall, roof
-                "k_h": None, # heat transfer index
-                "shgc": None, # solar heat gain coefficient
-                "r_l": None, # light refelectance
-                "t_l": None, # light transmittance
             }
 
             if int(float(faces_category[i])) == 2:

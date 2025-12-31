@@ -309,40 +309,41 @@ class Geometry_Option:
     @staticmethod
     def reorder_vertices(face, is_upward):
         """
-        Re-order vertices of a face to make the normal face upward or downward.
+        Re-order vertices of a face to ensure counter-clockwise order in top view (XY plane projection).
+        
+        This function forces all vertices to be arranged in counter-clockwise order when viewed from above,
+        regardless of the face normal direction. This replaces the previous right-hand rule approach.
         
         Parameters
         ----------
         face : numpy.ndarray
             Array of shape (n, 3) representing the sequence of vertices of a face.
         is_upward : bool
-            If True, reorders vertices so that the face normal points upward;
-            if False, reorders for downward normal.
+            Kept for backward compatibility but no longer affects the ordering logic.
+            All faces are now forced to counter-clockwise order in top view.
         
         Returns
         -------
         reordered_face : numpy.ndarray
-            Array of shape (n, 3) with vertices reordered according to the specified normal direction.
+            Array of shape (n, 3) with vertices reordered to counter-clockwise in top view.
         """
-        """Re-order vertices of a face to make the normal face upward or downward.
+        # Project vertices to XY plane (top view) by ignoring Z coordinate
+        vertices_2d = face[:, :2]  # Extract only X and Y coordinates
         
-        Args:
-            face: numpy array, shape=(n, 3), sequence of vertices of a face
-            is_upward: bool，True for upward, False for downward
+        # Calculate signed area using the shoelace formula (cross product sum)
+        # Positive area = counter-clockwise, Negative area = clockwise
+        n = len(vertices_2d)
+        signed_area = 0.0
+        for i in range(n):
+            x1, y1 = vertices_2d[i]
+            x2, y2 = vertices_2d[(i + 1) % n]
+            signed_area += (x1 * y2 - x2 * y1)
         
-        Returns:
-            reordered_face: numpy array, shape=(n, 3)
-        """
-        # calculate the sum of x, y, z of each vertex
-        sum_xyz = np.sum(face, axis=1)
-        min_index = np.argmin(sum_xyz)
+        # If signed area is negative, vertices are in clockwise order
+        # Reverse the order to make them counter-clockwise
+        if signed_area < 0:
+            face = face[::-1]
         
-        # reorder the vertices based on the minimum index
-        if is_upward:
-            face = np.roll(face, -min_index, axis=0)
-        else:
-            face = np.roll(face, -min_index + face.shape[0] - 1, axis=0)[::-1]
-            
         return face
 
     @staticmethod

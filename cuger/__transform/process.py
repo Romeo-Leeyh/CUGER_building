@@ -1,7 +1,7 @@
 import os
-from .convexify import MoosasConvexify
+from .convexify import *
 from .graph import MoosasGraph
-from graphIO import read_geo, write_geo, graph_to_json
+from graphIO import *
 
 
 def get_output_paths(modelname, output_dir):
@@ -16,7 +16,7 @@ def get_output_paths(modelname, output_dir):
         dict: A dictionary containing paths for various output files.
     """
     paths = {
-        "output_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
+        "convex_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
         "output_json_path": os.path.join(output_dir, "graph", f"{modelname}"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
         "new_geo_path": os.path.join(output_dir, "new_geo", f"{modelname}.geo"),
@@ -49,7 +49,7 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
 
     # Perform convexification
-    convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = MoosasConvexify.convexify_faces(
+    convex_cat, convex_idd, convex_normal, convex_faces, divided_lines = convexify_faces(
         cat, idd, normal, faces, holes
     )
 
@@ -58,7 +58,7 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
 
 
     if figure_path:
-        MoosasConvexify.plot_faces(convex_faces, divided_lines, file_path=figure_path)
+        plot_faces(convex_faces, divided_lines, file_path=figure_path)
 
 
 def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None):
@@ -70,12 +70,16 @@ def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None
         new_xml_path (str): Path to the new XML file.
         output_json_path (str): Path to save the graph as a JSON file.
     """
-
+    faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(new_geo_path)
+    root = read_xml(new_xml_path)
+    
     # Initialize the graph
     graph = MoosasGraph()
 
     # Build graph representation
-    graph.graph_representation(new_geo_path, new_xml_path)
+    graph.graph_representation_new(root, faces_category, faces_id, faces_normal, faces_vertices, faces_holes)
+
+    graph.graph_edit(_isolated_clean=True, _airwall_clean=True)
 
     # Save the graph as JSON
     graph_to_json(graph, output_json_path)

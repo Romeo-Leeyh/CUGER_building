@@ -25,18 +25,19 @@ def process_file(input_geo_path, modelname):
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
     try:
-        ps.convex_process(input_geo_path, paths["output_geo_path"], paths["figure_convex_path"])
-        
-        model = Moosas.transform(paths["output_geo_path"], paths["new_xml_path"], paths["new_geo_path"], 
+        ps.convex_process(input_geo_path, paths["convex_geo_path"], paths["figure_convex_path"])
+        model = Moosas.transform(paths["convex_geo_path"], 
                         solve_overlap=True, 
                         divided_zones=False, 
                         break_wall_horizontal=True, 
                         solve_redundant=True,
                         attach_shading=False,
                         standardize=True)
-                        
-        
-        Moosas.saveModel(model, paths["new_rdf_path"])
+
+        Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
+        Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
+        Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+        Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
 
         ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
     except ValueError as e:

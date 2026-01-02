@@ -4,209 +4,195 @@ import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
 
-import xml.etree.ElementTree as ET
-from . import convexify
-from graphIO import read_geo, write_geo, read_xml
 from scipy.spatial.transform import Rotation as R
 
+FACE_PARAM_TEMPLATE = {
+    "t": None,
+    "v": None,
+    "c": None,
+    "s": None,
+    "r": None,
+    "n": None,
+    "l": 0,         # 表达是否暴露在外部
+}
 
-class OBB:
+SPACE_PARAM_TEMPLATE = {
+    "c": None,
+    "s": None,
+    "r": None,
+}
+
+def create_obb(points, normal, min_scale = 0.1):
     """
-    Oriented Bounding Box (OBB) Class
-    Converts the space and faces into a OBB representation
-        center = (x,y,z) # 3D center of the OBB
-        scale = (l,w,h)  # 3D scale of the OBB
-        rotation = R(3x3) # 3x3 rotation matrix of the OBB
+    创建点集的定向包围盒 (OBB)，并返回 OBB 参数
+    参数:
+        points: np.ndarray, (N, 3);
+        normal: np.ndarray, (3,);
+        min_scale: float，OBB 的最小尺度
+    返回:
+        obb_params: dict，包含 OBB 相关参数
     """
+    # 以z轴和法向量创建相对坐标架
+    geometry = pygeos.multipoints(points)
+    z_axis = np.array([0,0,1])
+    z_r = normal
+    
+    
+    if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:  # 法向量判定                  
 
-    def create_obb(points, normal, min_scale = 0.1):
-        """
-        创建点集的定向包围盒 (OBB)，并返回 OBB 参数
-        参数:
-            points: np.ndarray, (N, 3);
-            normal: np.ndarray, (3,);
-            min_scale: float，OBB 的最小尺度
-        返回:
-            obb_params: dict，包含 OBB 相关参数
-        """
-        # 以z轴和法向量创建相对坐标架
-        geometry = pygeos.multipoints(points)
-        z_axis = np.array([0,0,1])
-        z_r = normal
+        z_r = z_axis
+        # 使用 pygeos 计算最小外接矩形（OBB），返回旋转的包围盒
+        min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
         
-        
-        if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:  # 法向量判定                  
+        # 获取 OBB 参数
+        obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
+        obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
+        obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
 
-            z_r = z_axis
-            # 使用 pygeos 计算最小外接矩形（OBB），返回旋转的包围盒
-            min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
-            
-            # 获取 OBB 参数
-            obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
-            obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
-            obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
+        # 计算边向量
+        if len(obb_coords) <= 2:
+            centroid = np.mean(points, axis=0)
+            x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
+            rotation = np.array([x_r, y_r, z_r])
+            rotation_matrix = R.from_matrix(rotation).as_matrix()
+            l = max(np.ptp(points[:, 0]), min_scale)
+            w = max(np.ptp(points[:, 1]), min_scale)
+            h = max(np.ptp(points[:, 2]), min_scale)
+    
+            original_obb_centroid = centroid
 
-            # 计算边向量
-            if len(obb_coords) <= 2:
-                centroid = np.mean(points, axis=0)
-                x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
-                rotation = np.array([x_r, y_r, z_r])
-                rotation_matrix = R.from_matrix(rotation).as_matrix()
-                l = max(np.ptp(points[:, 0]), min_scale)
-                w = max(np.ptp(points[:, 1]), min_scale)
-                h = max(np.ptp(points[:, 2]), min_scale)
-        
-                original_obb_centroid = centroid
-
-            else:
-                x_vec = obb_coords[1] - obb_coords[0]
-                y_vec = obb_coords[3] - obb_coords[0]
-            
-                # 计算范数
-                x_norm = np.linalg.norm(x_vec)
-                y_norm = np.linalg.norm(y_vec)
-                
-                # 检查范数并计算单位向量
-                if x_norm > 1e-6:
-                    x_r = x_vec / x_norm
-                else:
-                    x_r = np.array([1, 0, 0])  # 默认x方向
-                    
-                if y_norm > 1e-6:
-                    y_r = y_vec / y_norm
-                else:
-                    y_r = np.array([0, 1, 0])  # 默认y方向
-
-                rotation = np.array([x_r, y_r, z_r])
-                rotation_matrix = R.from_matrix(rotation).as_matrix()
-
-                l = np.linalg.norm(obb_coords[1] - obb_coords[0])
-                w = np.linalg.norm(obb_coords[3] - obb_coords[0])
-                h = max(np.max(points[:, 2])-np.min(points[:, 2]), min_scale) 
-
-                original_obb_centroid = np.mean(obb_coords, axis=0)
-            
         else:
-            x_r = np.cross(z_r, z_axis)
-            y_r = np.cross(z_r, x_r)
+            x_vec = obb_coords[1] - obb_coords[0]
+            y_vec = obb_coords[3] - obb_coords[0]
+        
+            # 计算范数
+            x_norm = np.linalg.norm(x_vec)
+            y_norm = np.linalg.norm(y_vec)
+            
+            # 检查范数并计算单位向量
+            if x_norm > 1e-6:
+                x_r = x_vec / x_norm
+            else:
+                x_r = np.array([1, 0, 0])  # 默认x方向
+                
+            if y_norm > 1e-6:
+                y_r = y_vec / y_norm
+            else:
+                y_r = np.array([0, 1, 0])  # 默认y方向
 
             rotation = np.array([x_r, y_r, z_r])
             rotation_matrix = R.from_matrix(rotation).as_matrix()
-            
 
-            rotated_points = points.dot(rotation_matrix.T)
+            l = np.linalg.norm(obb_coords[1] - obb_coords[0])
+            w = np.linalg.norm(obb_coords[3] - obb_coords[0])
+            h = max(np.max(points[:, 2])-np.min(points[:, 2]), min_scale) 
 
-            l = max(np.ptp(rotated_points[:, 0]), min_scale)
-            w = max(np.ptp(rotated_points[:, 1]), min_scale)
-            h = max(np.ptp(rotated_points[:, 2]), min_scale)
-            
-            centroid = np.mean([
-                [np.min(rotated_points[:, 0]), np.min(rotated_points[:, 1]), np.min(rotated_points[:, 2])],
-                [np.max(rotated_points[:, 0]), np.max(rotated_points[:, 1]), np.max(rotated_points[:, 2])]
-            ], axis=0)
-            
-            # 反向旋转 OBB 坐标
-            original_obb_centroid = np.dot(centroid, rotation_matrix)
+            original_obb_centroid = np.mean(obb_coords, axis=0)
+        
+    else:
+        x_r = np.cross(z_r, z_axis)
+        y_r = np.cross(z_r, x_r)
 
-        # 返回 OBB 参数
-        obb_params = {
-            'center': original_obb_centroid,
-            'scale': np.array([l,w,h]),
-            'rotation': rotation_matrix,
-        }
-
-        return obb_params
-    
-    def plot_obb_and_points(points, obb_params):
+        rotation = np.array([x_r, y_r, z_r])
+        rotation_matrix = R.from_matrix(rotation).as_matrix()
         
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        # 提取 OBB 参数
-        center = obb_params['center']
-        l, w, h = obb_params['scale']
-        Rot = obb_params['rotation']
+        rotated_points = points.dot(rotation_matrix.T)
 
-        # 8 个 OBB 角点的偏移量
-        offsets = np.array([
-            [-l/2, -w/2, -h/2],
-            [ l/2, -w/2, -h/2],
-            [ l/2,  w/2, -h/2],
-            [-l/2,  w/2, -h/2],
-            [-l/2, -w/2,  h/2],
-            [ l/2, -w/2,  h/2],
-            [ l/2,  w/2,  h/2],
-            [-l/2,  w/2,  h/2]
-        ])
+        l = max(np.ptp(rotated_points[:, 0]), min_scale)
+        w = max(np.ptp(rotated_points[:, 1]), min_scale)
+        h = max(np.ptp(rotated_points[:, 2]), min_scale)
+        
+        centroid = np.mean([
+            [np.min(rotated_points[:, 0]), np.min(rotated_points[:, 1]), np.min(rotated_points[:, 2])],
+            [np.max(rotated_points[:, 0]), np.max(rotated_points[:, 1]), np.max(rotated_points[:, 2])]
+        ], axis=0)
+        
+        # 反向旋转 OBB 坐标
+        original_obb_centroid = np.dot(centroid, rotation_matrix)
 
-        # 旋转并平移 OBB 角点
-        corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
+    # 返回 OBB 参数
+    obb_params = {
+        'center': original_obb_centroid,
+        'scale': np.array([l,w,h]),
+        'rotation': rotation_matrix,
+    }
 
-        # 绘制点云
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o')
+    return obb_params
 
-        # 连接 OBB 角点的边来构建立方体
-        edges = [
-            [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
-            [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
-            [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
-        ]
+def plot_obb_and_points(points, obb_params):
+    
 
-        # 通过 plot 直接绘制 OBB 的边
-        for edge in edges:
-            ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
-                    [corners[edge[0], 1], corners[edge[1], 1]], 
-                    [corners[edge[0], 2], corners[edge[1], 2]], 
-                    color='b')
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    # 提取 OBB 参数
+    center = obb_params['center']
+    l, w, h = obb_params['scale']
+    Rot = obb_params['rotation']
+
+    # 8 个 OBB 角点的偏移量
+    offsets = np.array([
+        [-l/2, -w/2, -h/2],
+        [ l/2, -w/2, -h/2],
+        [ l/2,  w/2, -h/2],
+        [-l/2,  w/2, -h/2],
+        [-l/2, -w/2,  h/2],
+        [ l/2, -w/2,  h/2],
+        [ l/2,  w/2,  h/2],
+        [-l/2,  w/2,  h/2]
+    ])
+
+    # 旋转并平移 OBB 角点
+    corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
+
+    # 绘制点云
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o')
+
+    # 连接 OBB 角点的边来构建立方体
+    edges = [
+        [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
+        [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
+        [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
+    ]
+
+    # 通过 plot 直接绘制 OBB 的边
+    for edge in edges:
+        ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
+                [corners[edge[0], 1], corners[edge[1], 1]], 
+                [corners[edge[0], 2], corners[edge[1], 2]], 
+                color='b')
 
 class MoosasGraph:
     """
     图化模块
     用于将建筑空间转为结构化有向图
-    1   将空间识别为定向包容盒(oriented bounding box)
-        表征参数: 5维向量(length, )
-
-        边表征参数：
-            space-face：方向；面属性（floor wall roof）
-            face-face：关系（相接、附着、属于   ）
-        需要调整的地方：
-            geo_out编号与xml一一对应，所以在重新生成geo后的编号也要调整，需要建立一个geo_out与geo_convex之间的索引字典
-
-            获取新的xml的索引方式：
-                感觉得重新调整一下输出xml的格式，先分割面生成新的geo_out再transform，要不然很麻烦
-                
-                创建面节点（geo_convex）
-                创建基于原xml的标准图（）
-
     """
     def __init__(self):
         """初始化一个空的有向图、空void、空面"""
-        self.graph = nx.DiGraph() 
+        self.graph = nx.Graph() 
         self.spaces = []
         self.faces = []
         self.positions = {}
 
-    def graph_representation(self, geo_path, xml_path, _is_cleaned=True):
-        """
-            Parse .xml and associated .geo files and build the ADSIM graph
-            Args:  
-                geo_path(str): *.geo file path
-                xml_path(str): *.xml file path
-            Returns:
-                graph
-        """
-        faces_id = []
-        faces_category =[]
-        faces_normal = []
-        faces_vertices = []
+    def nodes(self):
+        """获取图中的所有节点"""
+        return self.graph.nodes(data=True)
+
+    def edges(self):
+        """获取图中的所有边"""
+        return self.graph.edges(data=True)
+
+    def graph_representation(self, root, cat, idd, normal, faces, holes, _is_cleaned=True):
+
+        faces_id = idd
+        faces_category = cat
+        faces_normal = normal
+        faces_vertices = faces
+        faces_holes = holes
 
         spaces_id = []
         spaces_area = []
         
-        # 0.0   Initialize the read file
-        faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(geo_path)
-        root = read_xml(xml_path)
-
         # 1   Create a dictionary mapping Uid and faceId, Adding face nodes (FROM .geo) and face edges (FROM .xml)
         dict_u = {}
 
@@ -218,7 +204,7 @@ class MoosasGraph:
             if face_id in faces_id:
                 i = faces_id.index(face_id)
             else:
-                print(f"Skipping edge addition: Face '{face_id}' does not exist.")
+                print(f"Skipping node addition: Face '{face_id}' does not exist.")
                 continue
 
             face = {
@@ -230,7 +216,7 @@ class MoosasGraph:
 
             self.faces.append(face)
             
-            obb_params = OBB.create_obb(np.array(faces_vertices[i]), np.array(faces_normal[i]))
+            obb_params = create_obb(np.array(faces_vertices[i]), np.array(faces_normal[i]))
             
             # OBB.plot_obb_and_points(face['vertices'], obb_params)
             
@@ -340,7 +326,7 @@ class MoosasGraph:
                     else:
                         print(f"Skipping edge addition: Node wall '{wall_id}' does not exist.")
 
-            obb_params = OBB.create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
+            obb_params = create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
             #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
 
             space_params = {
@@ -359,6 +345,241 @@ class MoosasGraph:
                 if self.graph.degree(node) == 0:
                     self.graph.remove_node(node)
                     print (f"Removing node: {node}")
+
+
+    def graph_representation_new(self, root, cat, idd, normal, faces, holes):
+
+        dict_u = {}
+
+        # ---------- Face-like nodes ----------
+        for face in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
+            try:
+                uid = face.find('Uid').text
+                face_id = face.find('faceId').text
+                dict_u[uid] = [face_id]
+                self.graph.add_node(
+                    uid,
+                    node_type="face",
+                    face_params=FACE_PARAM_TEMPLATE.copy()
+                )
+            except Exception as e:
+                print(f"[Face Node Error] {e}")
+                continue
+
+        # ---------- Space / Void ----------
+        for space in root.findall('space'):
+            try:
+                sid = space.find('id').text.strip()
+                is_void = space.find('is_void').text == 'True'
+                self.graph.add_node(
+                    sid,
+                    node_type="void" if is_void else "space",
+                    space_params=SPACE_PARAM_TEMPLATE.copy()
+                )
+            except Exception as e:
+                print(f"[Space Node Error] {e}")
+                continue
+
+        # ---------- Face-Face edges ----------
+        for face in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
+            try:
+                uid = face.find('Uid').text
+                neighbors = face.find('neighbor')
+                if neighbors is not None:
+                    for edge in neighbors.findall('edge'):
+                        for key in edge.text.split():
+                            if key in self.graph:
+                                self.graph.add_edge(uid, key, adj="adjacent")
+            except Exception as e:
+                print(f"[Face-Face Edge Error] uid={uid if 'uid' in locals() else None}, {e}")
+                continue
+
+        # ---------- Glazing / Shading ----------
+        for face in root.findall('face') + root.findall('wall'):
+            try:
+                uid = face.find('Uid').text
+                glazing_element = face.find('glazingId')
+                shading_element = face.find('shadingId')
+
+                glazingid = glazing_element.text if glazing_element is not None else None
+                shadingid = shading_element.text if shading_element is not None else None
+
+                if glazingid:
+                    for g in glazingid.split():
+                        if g in self.graph:
+                            self.graph.add_edge(uid, g, adj='glazing')
+
+                if shadingid:
+                    for s in shadingid.split():
+                        if s in self.graph:
+                            self.graph.add_edge(uid, s, adj='shading')
+            except Exception as e:
+                print(f"[Glazing/Shading Error] uid={uid if 'uid' in locals() else None}, {e}")
+                continue
+
+        # ---------- Space-Face topology ----------
+        for space in root.findall('space'):
+            try:
+                sid = space.find('id').text.strip()
+                topo = space.find('topology')
+                if topo is None:
+                    print(f"[Skip Space Topology] no topology for space {sid}")
+                    continue
+
+                floors = topo.findall('floor/face')
+                for floor in floors:
+                    floor_id = floor.text
+                    if floor_id in self.graph.nodes:
+                        self.graph.nodes[floor_id]["face_params"]["t"] = "floor"
+                        self.graph.add_edge(sid, floor_id, attr='floor')
+                    else:
+                        print(f"Skipping edge addition: Node floor '{floor_id}' does not exist.")
+
+                ceilings = topo.findall('ceiling/face')
+                for ceiling in ceilings:
+                    ceiling_id = ceiling.text
+                    if ceiling_id in self.graph.nodes:
+                        self.graph.nodes[ceiling_id]["face_params"]["t"] = "floor"
+                        self.graph.add_edge(sid, ceiling_id, attr='ceiling')
+                    else:
+                        print(f"Skipping edge addition: Node ceiling '{ceiling_id}' does not exist.")
+
+                walls = topo.findall('edge/wall')
+                for wall in walls:
+                    wall_id = wall.find('Uid').text
+                    if wall_id in self.graph.nodes:
+                        self.graph.nodes[wall_id]["face_params"]["t"] = "wall"
+                        self.graph.add_edge(sid, wall_id, attr='wall')
+                    else:
+                        print(f"Skipping edge addition: Node wall '{wall_id}' does not exist.")
+
+            except Exception as e:
+                print(f"[Space-Face Topology Error] sid={sid if 'sid' in locals() else None}, {e}")
+                continue
+
+        # ---------- Build face / space parameters ----------
+        for nodeid, node in self.graph.nodes(data=True):
+
+            # ---------- Face params ----------
+            if node.get("node_type") == "face":
+                try:
+                    face_id = dict_u.get(nodeid, [None])[0]
+                    if face_id not in idd:
+                        print(f"[Skip Face] face_id not in idd: {face_id}")
+                        continue
+
+                    i = idd.index(face_id)
+
+                    verts = np.array(faces[i])
+                    n = np.array(normal[i])
+
+                    obb = create_obb(verts, n)
+
+                    node["face_params"].update({
+                        "v": verts,
+                        "c": obb["center"],
+                        "s": obb["scale"],
+                        "r": obb["rotation"],
+                        "n": n,
+                    })
+
+                    c = int(float(cat[i]))
+                    if c == 2:
+                        node["face_params"]['t'] = "airwall"
+                    elif c in (1, 5, 6):
+                        node["face_params"]['t'] = "window"
+
+                except Exception as e:
+                    print(f"[Face Param Error] nodeid={nodeid}, {e}")
+                    continue
+
+            # ---------- Space / Void params ----------
+            if node.get("node_type") in ("space", "void"):
+                try:
+                    boundary_verts = []
+
+                    for fid in self.graph.neighbors(nodeid):
+                        edata = self.graph.get_edge_data(nodeid, fid)
+                        if edata is None:
+                            continue
+                        attr = edata.get("attr")
+                        if attr in ("floor", "ceiling", "wall"):
+                            face_params = self.graph.nodes[fid].get("face_params", {})
+                            if face_params.get("v") is not None:
+                                boundary_verts.append(face_params["v"])
+
+                    if not boundary_verts:
+                        print(f"[Skip Space] no boundary faces: {nodeid}")
+                        continue
+
+                    verts = np.concatenate(boundary_verts, axis=0)
+                    obb = create_obb(verts, np.array([0, 0, 1]))
+
+                    node["space_params"].update({
+                        "c": obb["center"],
+                        "s": obb["scale"],
+                        "r": obb["rotation"],
+                    })
+
+                except Exception as e:
+                    print(f"[Space Param Error] nodeid={nodeid}, {e}")
+                    continue
+
+        return self.graph
+
+    def graph_edit(self, _isolated_clean=True, _airwall_clean=True):
+        """图结构编辑"""
+        # Remove isolated nodes
+        if _isolated_clean:
+            for node in list(self.graph.nodes()):
+                if self.graph.degree(node) == 0:
+                    self.graph.remove_node(node)
+                    print (f"Removing node: {node}")
+
+        # Remove airwall nodes
+        if _airwall_clean:
+            # 找到所有 airwall 节点
+            airwalls = [
+                n for n, d in self.graph.nodes(data=True)
+                if d.get("node_type") == "face"
+                and d.get("face_params", {}).get("t") == "airwall"
+            ]
+
+            for airwall in airwalls:
+                if airwall not in self.graph:
+                    continue
+
+                # 找到与 airwall 相连的所有邻居
+                neighbors = list(self.graph.neighbors(airwall))
+
+                for nbr in neighbors:
+                    if nbr == airwall:
+                        continue
+
+                    # 跳过邻居本身是 airwall 的情况
+                    nbr_data = self.graph.nodes[nbr]
+                    if nbr_data.get("node_type") == "face" and \
+                    nbr_data.get("face_params", {}).get("t") == "airwall":
+                        continue
+
+                    # 把 nbr 的所有边“转接”到 airwall
+                    nbr_neighbors = list(self.graph.neighbors(nbr))
+                    for nn in nbr_neighbors:
+                        if nn == airwall or nn == nbr:
+                            continue
+
+                        # 添加新边：airwall — nn
+                        if not self.graph.has_edge(airwall, nn):
+                            self.graph.add_edge(airwall, nn)
+
+                    # 删除 airwall — nbr 这条边
+                    if self.graph.has_edge(airwall, nbr):
+                        self.graph.remove_edge(airwall, nbr)
+
+                    # 删除 nbr 节点
+                    if nbr in self.graph:
+                        self.graph.remove_node(nbr)
+        return self.graph
 
     def draw_graph_3d(self, file_path, _fig_show =False):
         """绘制图结构的三维表示"""
@@ -484,68 +705,7 @@ class MoosasGraph:
         plt.savefig(file_path, dpi = 300)
         plt.close()
 
-    def nodes(self):
-        """获取图中的所有节点"""
-        return self.graph.nodes(data=True)
-
-    def edges(self):
-        """获取图中的所有边"""
-        return self.graph.edges(data=True)
-    
-  
-    def graph_representation_legacy(self, geo_path):
-        
-        # 为共享顶点分配唯一索引
-        def assign_vertex_indices(faces_vertices):
-            vertex_dict = {}
-            vertex_index = 0
-            faces_with_indices = []
-            
-            for vertices in faces_vertices:
-                indexed_vertices = []
-                for vertex in vertices:
-                    vertex_tuple = tuple(vertex)
-                    if vertex_tuple not in vertex_dict:
-                        vertex_dict[vertex_tuple] = vertex_index
-                        vertex_index += 1
-                    indexed_vertices.append(vertex_dict[vertex_tuple])
-                faces_with_indices.append(indexed_vertices)
-            return faces_with_indices, vertex_dict
-
-        # 优化后的共享顶点判断函数，使用索引比较
-        def shared_vertices_by_index(face1, face2):
-            vertices1 = set(face1['vertex_indices'])
-            vertices2 = set(face2['vertex_indices'])
-            shared_count = len(vertices1 & vertices2)  # 计算交集中的顶点数量
-            return shared_count >= 2
 
     
-        faces_category, faces_id, faces_normal, faces_vertices = convexify.read_geo(geo_path)
 
-        
-        faces_with_indices, vertex_dict = assign_vertex_indices(faces_vertices)
-
-        # 初始化面集合
-        for i in range(len(faces_id)):
-            face = {
-                'category': faces_category[i],
-                'id': faces_id[i],
-                'normal': np.array(faces_normal[i]),
-                'vertices': np.array(faces_vertices[i]),  # 原始顶点
-                'vertex_indices': faces_with_indices[i]    # 顶点索引
-            }
-            self.faces.append(face)
-
-        # 为每个非 category=1 的面添加节点
-        for face in self.faces:
-            if face['category'] != 1:
-                centroid = np.mean(face['vertices'], axis=0)
-                self.face_graph.add_node(face['id'], pos=centroid)
-                self.positions[face['id']] = centroid
-
-        # 添加共享顶点的边
-        for i, face1 in enumerate(self.faces):
-            for j, face2 in enumerate(self.faces):
-                if i != j and shared_vertices_by_index(face1, face2):
-                    self.face_graph.add_edge(face1['id'], face2['id'])
 

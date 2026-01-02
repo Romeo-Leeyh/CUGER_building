@@ -1,8 +1,7 @@
 """
     This is the i/o module of encodling and representation algorithm. Different from the Moosas+ i/o module, this algorithm do not use pygeos to process geometry !!!
 """
-import sys
-import os
+
 import numpy as np
 import xml.etree.ElementTree as ET
 import json

@@ -120,6 +120,33 @@ class BasicOptions:
         return  in_cone(verts, indices, ia, ib) and \
                 in_cone(verts, indices, ib, ia) and \
                 diagonalie(verts, indices, ia, ib)
+    
+    @staticmethod
+    def polygon_area_2d(vertices):
+        """
+        Calculate the area of a 2D polygon using the shoelace formula.
+        
+        Parameters
+        ----------
+        vertices : list or numpy.ndarray
+            List of 2D vertices (x, y) forming a polygon.
+        
+        Returns
+        -------
+        float
+            The area of the polygon.
+        """
+        if len(vertices) < 3:
+            return 0.0
+        
+        area = 0.0
+        n = len(vertices)
+        for i in range(n):
+            x1, y1 = vertices[i][:2]
+            x2, y2 = vertices[(i + 1) % n][:2]
+            area += x1 * y2 - x2 * y1
+        
+        return abs(area) / 2.0
 
 class Geometry_Option:
     @staticmethod
@@ -184,6 +211,98 @@ class Geometry_Option:
             return True
 
         return False
+
+    @staticmethod
+    def is_valid_face(vertices, area_eps=1e-8):
+        """
+        Check whether a 3D polygon face is geometrically valid.
+
+        Parameters
+        ----------
+        vertices : list or np.ndarray, shape (N, 3)
+            Vertices of the polygon.
+        area_eps : float
+            Area threshold below which the face is considered degenerate.
+
+        Returns
+        -------
+        bool
+            True if face is valid, False otherwise.
+        """
+
+        # 1. Vertex count
+        if vertices is None or len(vertices) < 3:
+            return False
+
+        v = np.asarray(vertices, dtype=float)
+
+        # 2. Finite check
+        if not np.isfinite(v).all():
+            return False
+
+        # 3. Area check (fan triangulation)
+        p0 = v[0]
+        area = 0.0
+
+        for i in range(1, len(v) - 1):
+            e1 = v[i]     - p0
+            e2 = v[i + 1] - p0
+            area += 0.5 * np.linalg.norm(np.cross(e1, e2))
+
+        if area <= area_eps:
+            return False
+
+        return True
+    
+    @staticmethod
+    def compute_max_inscribed_quadrilateral(vertices):
+        """
+        Compute the maximum area inscribed quadrilateral from a convex polygon.
+        
+        The inscribed quadrilateral has all four vertices selected from the polygon's vertices.
+        This function uses a brute-force approach to find the quadrilateral with maximum area.
+        
+        Parameters
+        ----------
+        vertices : list or numpy.ndarray
+            List of vertices of a convex polygon, ordered counter-clockwise.
+        
+        Returns
+        -------
+        list
+            List of four vertices forming the maximum area inscribed quadrilateral,
+            or the original vertices if fewer than 4 vertices exist.
+        """
+        n = len(vertices)
+        
+        # If polygon has 4 or fewer vertices, return as is
+        if n <= 4:
+            return vertices
+        
+        max_area = 0.0
+        best_quad_indices = None
+        
+        # Brute-force search through all combinations of 4 vertices
+        for i in range(n):
+            for j in range(i + 1, n):
+                for k in range(j + 1, n):
+                    for l in range(k + 1, n):
+                        # Create quadrilateral from selected vertex indices
+                        quad_vertices = [vertices[i], vertices[j], vertices[k], vertices[l]]
+                        
+                        # Calculate area of this quadrilateral
+                        area = BasicOptions.polygon_area_2d(quad_vertices)
+                        
+                        # Update best quadrilateral if this one has larger area
+                        if area > max_area:
+                            max_area = area
+                            best_quad_indices = [i, j, k, l]
+        
+        # Return the best inscribed quadrilateral found
+        if best_quad_indices is not None:
+            return [vertices[idx] for idx in best_quad_indices]
+        else:
+            return vertices
 
 
     @staticmethod

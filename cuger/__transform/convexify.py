@@ -795,7 +795,7 @@ def convexify_faces(cat, idd, normal, faces, holes,
     for idx, face in enumerate(faces):
         # Skip invalid faces if validation is enabled
         if valid_face and not GeometryValidator._is_valid_face(face):
-            print(f"Skipping invalid face {idd[idx]}")
+            print(f"    Skipping invalid face {idd[idx]}")
             continue
         
         if np.abs(normal[idx][2]) > 1e-3:  # Not wall
@@ -829,12 +829,12 @@ def convexify_faces(cat, idd, normal, faces, holes,
                     if GeometryValidator._is_valid_face(verts[poly]):
                         subfaces.append(verts[poly])
                     if not GeometryValidator._is_valid_face(verts[poly]):
-                        print(f"Skipping invalid sub-face in face {idd[idx]}")
+                        print(f"    Skipping invalid sub-face in face {idd[idx]}")
                         continue
                 if clean_quad and len(poly) > 4:
                     quad_poly = GeometryOperator.compute_max_inscribed_quadrilateral(verts[poly])
                     if valid_face and not GeometryValidator._is_valid_face(quad_poly):
-                        print(f"Skipping invalid quadrilateral sub-face in face {idd[idx]}")
+                        print(f"    Skipping invalid quadrilateral sub-face in face {idd[idx]}")
                         continue
                     subfaces.append(np.array(quad_poly))
                 else:

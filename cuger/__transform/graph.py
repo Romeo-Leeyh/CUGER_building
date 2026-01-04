@@ -266,7 +266,7 @@ class MoosasGraph:
                     floor_id = floor.text
                     if floor_id in self.graph.nodes:
                         self.graph.nodes[floor_id]["face_params"]["t"] = "floor"
-                        self.graph.add_edge(sid, floor_id, attr='floor')
+                        self.graph.add_edge(sid, floor_id, attr='floor', layer=0)
                     else:
                         print(f"Skipping edge addition: Node floor '{floor_id}' does not exist.")
 
@@ -275,7 +275,7 @@ class MoosasGraph:
                     ceiling_id = ceiling.text
                     if ceiling_id in self.graph.nodes:
                         self.graph.nodes[ceiling_id]["face_params"]["t"] = "floor"
-                        self.graph.add_edge(sid, ceiling_id, attr='ceiling')
+                        self.graph.add_edge(sid, ceiling_id, attr='ceiling', layer=0)
                     else:
                         print(f"Skipping edge addition: Node ceiling '{ceiling_id}' does not exist.")
 
@@ -284,7 +284,7 @@ class MoosasGraph:
                     wall_id = wall.find('Uid').text
                     if wall_id in self.graph.nodes:
                         self.graph.nodes[wall_id]["face_params"]["t"] = "wall"
-                        self.graph.add_edge(sid, wall_id, attr='wall')
+                        self.graph.add_edge(sid, wall_id, attr='wall', layer=0)
                     else:
                         print(f"Skipping edge addition: Node wall '{wall_id}' does not exist.")
 
@@ -369,7 +369,6 @@ class MoosasGraph:
                 print (f"Removing node: {node}")
 
     def clean_airwall_nodes(self):
-        # 找到所有 airwall 节点
         airwalls = [
             n for n, d in self.graph.nodes(data=True)
             if d.get("node_type") == "face"
@@ -380,57 +379,183 @@ class MoosasGraph:
             if airwall not in self.graph:
                 continue
 
-            # 找到与 airwall 相连的所有邻居
             neighbors = list(self.graph.neighbors(airwall))
 
             for nbr in neighbors:
                 if nbr == airwall:
                     continue
 
-                # 跳过邻居本身是 airwall 的情况
                 nbr_data = self.graph.nodes[nbr]
                 if nbr_data.get("node_type") == "face" and \
                 nbr_data.get("face_params", {}).get("t") == "airwall":
                     continue
 
-                # 把 nbr 的所有边“转接”到 airwall
+                # nbr 的所有邻居
                 nbr_neighbors = list(self.graph.neighbors(nbr))
                 for nn in nbr_neighbors:
-                    if nn == airwall or nn == nbr:
+                    if nn in (airwall, nbr):
                         continue
 
-                    # 添加新边：airwall — nn
-                    if not self.graph.has_edge(airwall, nn):
-                        self.graph.add_edge(airwall, nn)
+                    # 拷贝原边属性
+                    edge_data = dict(self.graph.get_edge_data(nbr, nn) or {})
 
-                # 删除 airwall — nbr 这条边
+                    # 转接到 airwall
+                    if not self.graph.has_edge(airwall, nn):
+                        self.graph.add_edge(airwall, nn, **edge_data)
+
+                # 删除 airwall — nbr 边
                 if self.graph.has_edge(airwall, nbr):
                     self.graph.remove_edge(airwall, nbr)
 
-                # 删除 nbr 节点
+                # 删除 nbr 节点（会顺带删掉 nbr—nn）
                 if nbr in self.graph:
                     self.graph.remove_node(nbr)
     
-    def embedd_outer_layer_edges(self):
-        pass  # TODO: 实现外层边嵌入功能
+    def embed_outer_layer_edges(self, layers: int=3):
+        """
+        为建筑图结构中的face节点和space-face边分配层级属性
+        使用拓扑结构识别外部节点,而不依赖face类型属性
+        
+        参数:
+            layers: int - 需要标记的最大层数
+        
+        拓扑识别逻辑:
+            1. 外部face节点的特征是只与1个space相连(单侧面)
+            2. 内部face节点通常与2个space相连(双侧分隔面)
+            3. window/airwall节点可能不直接连接space,需要通过adjacent关系传播
+            4. 从最外层向内层逐层扩展,直到达到指定深度
+        """
+        # 初始化所有face节点的层级为0
+        for node, data in self.graph.nodes(data=True):
+            if data.get("node_type") == "face":
+                data["face_params"]["l"] = 0
+        
+        # 用于记录已处理的节点和空间
+        processed_faces = set()
+        processed_spaces = set()
+        
+        # ========== 第1层:找出最外层的face节点 ==========
+        # 策略:找出只连接1个space的face节点(拓扑外部特征)
+        current_layer_faces = set()
+        
+        for node, data in self.graph.nodes(data=True):
+            if data.get("node_type") == "face":
+                # 统计该face节点连接的space/void节点数量
+                connected_spaces = []
+                for neighbor in self.graph.neighbors(node):
+                    neighbor_data = self.graph.nodes[neighbor]
+                    if neighbor_data.get("node_type") in ["space", "void"]:
+                        connected_spaces.append(neighbor)
+                
+                # 只连接1个space的face节点被认为是外部节点
+                if len(connected_spaces) == 1:
+                    current_layer_faces.add(node)
+        
+        # 扩展:找出与外部节点adjacent的window/airwall节点
+        # 这些透明节点虽然可能不直接连接space,但它们在外部
+        transparent_nodes = set()
+        for face_node in current_layer_faces:
+            for neighbor in self.graph.neighbors(face_node):
+                neighbor_data = self.graph.nodes[neighbor]
+                if neighbor_data.get("node_type") == "face":
+                    # 检查是否为透明节点
+                    face_type = neighbor_data.get("face_params", {}).get("t")
+                    if face_type in ["window", "airwall"]:
+                        edge_data = self.graph.get_edge_data(face_node, neighbor)
+                        if edge_data and edge_data.get("adj") == "adjacent":
+                            transparent_nodes.add(neighbor)
+        
+        # 将透明节点也加入最外层
+        current_layer_faces.update(transparent_nodes)
+        
+        # 如果没有找到任何外部节点(异常情况),使用备用策略
+        if not current_layer_faces:
+            # 备用策略:找出度数最小的face节点
+            face_degrees = []
+            for node, data in self.graph.nodes(data=True):
+                if data.get("node_type") == "face":
+                    degree = self.graph.degree(node)
+                    face_degrees.append((node, degree))
+            
+            if face_degrees:
+                min_degree = min(deg for _, deg in face_degrees)
+                current_layer_faces = {node for node, deg in face_degrees if deg == min_degree}
+        
+        # ========== 开始分层处理 ==========
+        for layer in range(1, layers + 1):
+            print (f"   Processing layer {layer} with {len(current_layer_faces)} face nodes")
+            if not current_layer_faces:
+                # 没有更多的face节点可以处理,提前结束
+                print ("    No more face nodes to process at layer", layer)
+                break
+            
+            # 为当前层的face节点赋值
+            for face_node in current_layer_faces:
+                if face_node not in processed_faces:
+                    self.graph.nodes[face_node]["face_params"]["l"] = layer
+                    processed_faces.add(face_node)
+            
+            # 找出当前层face节点连接的space节点,并为space-face边添加layer属性
+            current_layer_spaces = set()
+            for face_node in current_layer_faces:
+                for neighbor in self.graph.neighbors(face_node):
+                    neighbor_data = self.graph.nodes[neighbor]
+                    if neighbor_data.get("node_type") in ["space", "void"]:
+                        if neighbor not in processed_spaces:
+                            current_layer_spaces.add(neighbor)
+                            # 为space-face边添加layer属性
+                            if self.graph.has_edge(neighbor, face_node):
+                                self.graph[neighbor][face_node]["layer"] = layer
+            
+            processed_spaces.update(current_layer_spaces)
+            
+            # ========== 找出下一层的face节点 ==========
+            next_layer_faces = set()
+            for space_node in current_layer_spaces:
+                for neighbor in self.graph.neighbors(space_node):
+                    neighbor_data = self.graph.nodes[neighbor]
+                    if neighbor_data.get("node_type") == "face":
+                        if neighbor not in processed_faces:
+                            # 直接添加该face节点
+                            next_layer_faces.add(neighbor)
+                            
+                            # 如果该节点是透明节点,还需要找出与其adjacent的face节点
+                            face_type = neighbor_data.get("face_params", {}).get("t")
+                            if face_type in ["window", "airwall"]:
+                                for trans_neighbor in self.graph.neighbors(neighbor):
+                                    trans_neighbor_data = self.graph.nodes[trans_neighbor]
+                                    if trans_neighbor_data.get("node_type") == "face":
+                                        if trans_neighbor not in processed_faces:
+                                            edge_data = self.graph.get_edge_data(neighbor, trans_neighbor)
+                                            if edge_data and edge_data.get("adj") == "adjacent":
+                                                next_layer_faces.add(trans_neighbor)
+            
+            # 移动到下一层
+            current_layer_faces = next_layer_faces
+        
+        return self.graph
     
-    def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=False):
+    def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=True):
         """图结构编辑"""
         if _isolated_clean:
+            print("--cleaned isolated nodes--")
             self.clean_isolated_nodes()
-
+ 
         if _airwall_clean:
+            print("--merged airwall and its parents nodes--")
             self.clean_airwall_nodes()
 
         if _outer_layer_edge_embedding:
-            pass  # TODO: 实现外层边嵌入功能
+            print("--embedded outer layer edges--")
+            self.embed_outer_layer_edges()
+
         return self.graph
 
     def draw_graph_3d(self, file_path, _fig_show =False):
         """绘制图结构的三维表示"""
         fig = plt.figure(figsize=(20, 10))
         ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=45, azim=15)  # 设置仰角为30度，方位角为45度
+        ax.view_init(elev=45, azim=15)  
 
 
         colors = {

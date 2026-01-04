@@ -13,7 +13,7 @@ FACE_PARAM_TEMPLATE = {
     "s": None,
     "r": None,
     "n": None,
-    "l": 0,         # 表达是否暴露在外部
+    "l": 0,         # indicates whether the face is exposed to the outside
 }
 
 SPACE_PARAM_TEMPLATE = {
@@ -24,32 +24,32 @@ SPACE_PARAM_TEMPLATE = {
 
 def create_obb(points, normal, min_scale = 0.1):
     """
-    创建点集的定向包围盒 (OBB)，并返回 OBB 参数
-    参数:
-        points: np.ndarray, (N, 3);
-        normal: np.ndarray, (3,);
-        min_scale: float，OBB 的最小尺度
-    返回:
-        obb_params: dict，包含 OBB 相关参数
+    Create an oriented bounding box (OBB) for a set of points and return OBB parameters.
+    Parameters:
+        points: np.ndarray, (N, 3)
+        normal: np.ndarray, (3,)
+        min_scale: float, minimum allowed OBB scale
+    Returns:
+        obb_params: dict containing OBB parameters
     """
-    # 以z轴和法向量创建相对坐标架
+    # Create a local coordinate frame using the z-axis and the provided normal
     geometry = pygeos.multipoints(points)
     z_axis = np.array([0,0,1])
     z_r = normal
     
     
-    if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:  # 法向量判定                  
+    if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:  # check normal near z-axis
 
         z_r = z_axis
-        # 使用 pygeos 计算最小外接矩形（OBB），返回旋转的包围盒
+        # Use pygeos to compute the minimum rotated rectangle (2D OBB projection)
         min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
         
-        # 获取 OBB 参数
+        # Get OBB coordinates
         obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
         obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
         obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
 
-        # 计算边向量
+        # Compute edge vectors
         if len(obb_coords) <= 2:
             centroid = np.mean(points, axis=0)
             x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
@@ -65,20 +65,20 @@ def create_obb(points, normal, min_scale = 0.1):
             x_vec = obb_coords[1] - obb_coords[0]
             y_vec = obb_coords[3] - obb_coords[0]
         
-            # 计算范数
+            # Compute norms
             x_norm = np.linalg.norm(x_vec)
             y_norm = np.linalg.norm(y_vec)
             
-            # 检查范数并计算单位向量
+            # Check norms and compute unit vectors, fallback to defaults if degenerate
             if x_norm > 1e-6:
                 x_r = x_vec / x_norm
             else:
-                x_r = np.array([1, 0, 0])  # 默认x方向
+                x_r = np.array([1, 0, 0])  # default x direction
                 
             if y_norm > 1e-6:
                 y_r = y_vec / y_norm
             else:
-                y_r = np.array([0, 1, 0])  # 默认y方向
+                y_r = np.array([0, 1, 0])  # default y direction
 
             rotation = np.array([x_r, y_r, z_r])
             rotation_matrix = R.from_matrix(rotation).as_matrix()
@@ -108,10 +108,10 @@ def create_obb(points, normal, min_scale = 0.1):
             [np.max(rotated_points[:, 0]), np.max(rotated_points[:, 1]), np.max(rotated_points[:, 2])]
         ], axis=0)
         
-        # 反向旋转 OBB 坐标
+        # Inverse-rotate OBB centroid back to original coordinates
         original_obb_centroid = np.dot(centroid, rotation_matrix)
 
-    # 返回 OBB 参数
+    # Return OBB parameters
     obb_params = {
         'center': original_obb_centroid,
         'scale': np.array([l,w,h]),
@@ -125,12 +125,12 @@ def plot_obb_and_points(points, obb_params):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    # 提取 OBB 参数
+    # Extract OBB parameters
     center = obb_params['center']
     l, w, h = obb_params['scale']
     Rot = obb_params['rotation']
 
-    # 8 个 OBB 角点的偏移量
+    # Offsets for 8 OBB corner points
     offsets = np.array([
         [-l/2, -w/2, -h/2],
         [ l/2, -w/2, -h/2],
@@ -142,20 +142,20 @@ def plot_obb_and_points(points, obb_params):
         [-l/2,  w/2,  h/2]
     ])
 
-    # 旋转并平移 OBB 角点
+    # Rotate and translate OBB corner points
     corners = np.dot((np.dot(center, Rot.T) + offsets), Rot)
 
-    # 绘制点云
+    # Plot point cloud
     ax.scatter(points[:, 0], points[:, 1], points[:, 2], c='r', marker='o')
 
-    # 连接 OBB 角点的边来构建立方体
+    # Edges connecting OBB corners to form the box
     edges = [
-        [0, 1], [1, 2], [2, 3], [3, 0],  # 底面边
-        [4, 5], [5, 6], [6, 7], [7, 4],  # 顶面边
-        [0, 4], [1, 5], [2, 6], [3, 7]   # 连接顶面和底面
+        [0, 1], [1, 2], [2, 3], [3, 0],  # bottom face edges
+        [4, 5], [5, 6], [6, 7], [7, 4],  # top face edges
+        [0, 4], [1, 5], [2, 6], [3, 7]   # connecting top and bottom faces
     ]
 
-    # 通过 plot 直接绘制 OBB 的边
+    # Draw OBB edges using plot
     for edge in edges:
         ax.plot([corners[edge[0], 0], corners[edge[1], 0]], 
                 [corners[edge[0], 1], corners[edge[1], 1]], 
@@ -164,22 +164,22 @@ def plot_obb_and_points(points, obb_params):
 
 class MoosasGraph:
     """
-    图化模块
-    用于将建筑空间转为结构化有向图
+    Graph module
+    Converts building spaces into a structured graph representation
     """
     def __init__(self):
-        """初始化一个空的有向图、空void、空面"""
+        """Initialize an empty graph and empty lists for spaces and faces"""
         self.graph = nx.Graph() 
         self.spaces = []
         self.faces = []
         self.positions = {}
 
     def nodes(self):
-        """获取图中的所有节点"""
+        """Get all nodes in the graph"""
         return self.graph.nodes(data=True)
 
     def edges(self):
-        """获取图中的所有边"""
+        """Get all edges in the graph"""
         return self.graph.edges(data=True)
 
     def graph_representation_new(self, root, cat, idd, normal, faces, holes):
@@ -390,87 +390,87 @@ class MoosasGraph:
                 nbr_data.get("face_params", {}).get("t") == "airwall":
                     continue
 
-                # nbr 的所有邻居
+                # all neighbors of nbr
                 nbr_neighbors = list(self.graph.neighbors(nbr))
                 for nn in nbr_neighbors:
                     if nn in (airwall, nbr):
                         continue
 
-                    # 拷贝原边属性
+                    # copy original edge attributes
                     edge_data = dict(self.graph.get_edge_data(nbr, nn) or {})
 
-                    # 转接到 airwall
+                    # reconnect to airwall
                     if not self.graph.has_edge(airwall, nn):
                         self.graph.add_edge(airwall, nn, **edge_data)
 
-                # 删除 airwall — nbr 边
+                # remove airwall—nbr edge
                 if self.graph.has_edge(airwall, nbr):
                     self.graph.remove_edge(airwall, nbr)
 
-                # 删除 nbr 节点（会顺带删掉 nbr—nn）
+                # remove nbr node (this also removes nbr—nn edges)
                 if nbr in self.graph:
                     self.graph.remove_node(nbr)
     
     def embed_outer_layer_edges(self, layers: int=3):
         """
-        为建筑图结构中的face节点和space-face边分配层级属性
-        使用拓扑结构识别外部节点,而不依赖face类型属性
-        
-        参数:
-            layers: int - 需要标记的最大层数
-        
-        拓扑识别逻辑:
-            1. 外部face节点的特征是只与1个space相连(单侧面)
-            2. 内部face节点通常与2个space相连(双侧分隔面)
-            3. window/airwall节点可能不直接连接space,需要通过adjacent关系传播
-            4. 从最外层向内层逐层扩展,直到达到指定深度
+        Assign layer attributes to face nodes and space-face edges in the building graph.
+        Identify external faces using topology instead of relying on face type.
+
+        Parameters:
+            layers: int - maximum number of layers to mark
+
+        Topological identification logic:
+            1. External face nodes typically connect to only one space (single-sided)
+            2. Internal face nodes usually connect to two spaces (partitioning faces)
+            3. window/airwall nodes may not directly connect to spaces and can propagate via 'adjacent' relations
+            4. Expand from the outermost layer inward layer by layer until reaching the specified depth
         """
-        # 初始化所有face节点的层级为0
+        # Initialize layer 0 for all face nodes
         for node, data in self.graph.nodes(data=True):
             if data.get("node_type") == "face":
                 data["face_params"]["l"] = 0
         
-        # 用于记录已处理的节点和空间
+        # Sets to record processed faces and spaces
         processed_faces = set()
         processed_spaces = set()
         
-        # ========== 第1层:找出最外层的face节点 ==========
-        # 策略:找出只连接1个space的face节点(拓扑外部特征)
+        # ========== Layer 1: find outermost face nodes ==========
+        # Strategy: find faces connected to only one space (topological outside)
         current_layer_faces = set()
         
         for node, data in self.graph.nodes(data=True):
             if data.get("node_type") == "face":
-                # 统计该face节点连接的space/void节点数量
+                # Count number of connected space/void neighbors
                 connected_spaces = []
                 for neighbor in self.graph.neighbors(node):
                     neighbor_data = self.graph.nodes[neighbor]
                     if neighbor_data.get("node_type") in ["space", "void"]:
                         connected_spaces.append(neighbor)
                 
-                # 只连接1个space的face节点被认为是外部节点
+                # Faces connected to only one space are considered outer faces
                 if len(connected_spaces) == 1:
                     current_layer_faces.add(node)
         
-        # 扩展:找出与外部节点adjacent的window/airwall节点
-        # 这些透明节点虽然可能不直接连接space,但它们在外部
+        # Expand: find window/airwall nodes adjacent to outer faces
+        # These transparent nodes may not directly connect to spaces but are considered external
         transparent_nodes = set()
         for face_node in current_layer_faces:
             for neighbor in self.graph.neighbors(face_node):
                 neighbor_data = self.graph.nodes[neighbor]
                 if neighbor_data.get("node_type") == "face":
-                    # 检查是否为透明节点
+                    # Check if it is a transparent node
                     face_type = neighbor_data.get("face_params", {}).get("t")
                     if face_type in ["window", "airwall"]:
                         edge_data = self.graph.get_edge_data(face_node, neighbor)
                         if edge_data and edge_data.get("adj") == "adjacent":
                             transparent_nodes.add(neighbor)
         
-        # 将透明节点也加入最外层
+        # Include transparent nodes in the outermost layer
         current_layer_faces.update(transparent_nodes)
         
-        # 如果没有找到任何外部节点(异常情况),使用备用策略
+        # If no outer nodes are found (edge case), use fallback strategy
         if not current_layer_faces:
-            # 备用策略:找出度数最小的face节点
+            # Fallback: find face nodes with minimum degree
             face_degrees = []
             for node, data in self.graph.nodes(data=True):
                 if data.get("node_type") == "face":
@@ -481,21 +481,21 @@ class MoosasGraph:
                 min_degree = min(deg for _, deg in face_degrees)
                 current_layer_faces = {node for node, deg in face_degrees if deg == min_degree}
         
-        # ========== 开始分层处理 ==========
+        # ========== Start layered processing ==========
         for layer in range(1, layers + 1):
             print (f"   Processing layer {layer} with {len(current_layer_faces)} face nodes")
             if not current_layer_faces:
-                # 没有更多的face节点可以处理,提前结束
+                # No more face nodes to process, exit early
                 print ("    No more face nodes to process at layer", layer)
                 break
             
-            # 为当前层的face节点赋值
+            # Assign layer number to faces in the current layer
             for face_node in current_layer_faces:
                 if face_node not in processed_faces:
                     self.graph.nodes[face_node]["face_params"]["l"] = layer
                     processed_faces.add(face_node)
             
-            # 找出当前层face节点连接的space节点,并为space-face边添加layer属性
+            # Find space nodes connected to current faces and add layer attribute to space-face edges
             current_layer_spaces = set()
             for face_node in current_layer_faces:
                 for neighbor in self.graph.neighbors(face_node):
@@ -503,23 +503,23 @@ class MoosasGraph:
                     if neighbor_data.get("node_type") in ["space", "void"]:
                         if neighbor not in processed_spaces:
                             current_layer_spaces.add(neighbor)
-                            # 为space-face边添加layer属性
+                            # add layer attribute to space-face edges
                             if self.graph.has_edge(neighbor, face_node):
                                 self.graph[neighbor][face_node]["layer"] = layer
             
             processed_spaces.update(current_layer_spaces)
             
-            # ========== 找出下一层的face节点 ==========
+            # ========== Find next layer face nodes ==========
             next_layer_faces = set()
             for space_node in current_layer_spaces:
                 for neighbor in self.graph.neighbors(space_node):
                     neighbor_data = self.graph.nodes[neighbor]
                     if neighbor_data.get("node_type") == "face":
                         if neighbor not in processed_faces:
-                            # 直接添加该face节点
+                            # Directly add this face node
                             next_layer_faces.add(neighbor)
                             
-                            # 如果该节点是透明节点,还需要找出与其adjacent的face节点
+                            # If it's a transparent node, also find faces adjacent to it
                             face_type = neighbor_data.get("face_params", {}).get("t")
                             if face_type in ["window", "airwall"]:
                                 for trans_neighbor in self.graph.neighbors(neighbor):
@@ -530,13 +530,13 @@ class MoosasGraph:
                                             if edge_data and edge_data.get("adj") == "adjacent":
                                                 next_layer_faces.add(trans_neighbor)
             
-            # 移动到下一层
+            # Move to the next layer
             current_layer_faces = next_layer_faces
         
         return self.graph
     
     def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=True):
-        """图结构编辑"""
+        """Graph structure editing"""
         if _isolated_clean:
             print("--cleaned isolated nodes--")
             self.clean_isolated_nodes()
@@ -552,7 +552,7 @@ class MoosasGraph:
         return self.graph
 
     def draw_graph_3d(self, file_path, _fig_show =False):
-        """绘制图结构的三维表示"""
+        """Draw 3D representation of the graph"""
         fig = plt.figure(figsize=(20, 10))
         ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=45, azim=15)  
@@ -569,7 +569,7 @@ class MoosasGraph:
             None: 'white'  
         }
         
-        # 绘制节点
+        # Draw nodes
         for node in self.graph.nodes():
             if 'face_params' in self.graph.nodes[node]:
                 center = self.graph.nodes[node]['face_params']['c']
@@ -591,7 +591,7 @@ class MoosasGraph:
                         c=color, s=50, edgecolors='k')
 
         
-        # 绘制边
+        # Draw edges
         for edge in self.graph.edges():
             start_node, end_node = edge
             if ('face_params' in self.graph.nodes[start_node] and 
@@ -600,11 +600,11 @@ class MoosasGraph:
                 start_pos = self.graph.nodes[start_node]['face_params']['c']
                 end_pos = self.graph.nodes[end_node]['face_params']['c']
 
-                # 获取边的属性
+                # Get edge attributes
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
                 edge_color = '#999999' if edge_attr == 'default' else 'orange'
                 
-                # 绘制边
+                # Draw edge
                 ax.plot([start_pos[0], end_pos[0]],
                     [start_pos[1], end_pos[1]],
                     [start_pos[2], end_pos[2]],
@@ -616,17 +616,17 @@ class MoosasGraph:
                 start_pos = self.graph.nodes[start_node]['space_params']['c']
                 end_pos = self.graph.nodes[end_node]['face_params']['c']
 
-                # 获取边的属性
+                # Get edge attributes
                 edge_attr = self.graph.edges[edge].get('attr', 'default')
                 edge_color = 'gray' 
                 
-                # 绘制边
+                # Draw edge
                 ax.plot([start_pos[0], end_pos[0]],
                     [start_pos[1], end_pos[1]],
                     [start_pos[2], end_pos[2]],
                     color=edge_color, linestyle='--', alpha=0.5)
                     
-        # 添加图例
+            # Add legend
 
         x_vals, y_vals, z_vals = [], [], []
     
@@ -642,7 +642,7 @@ class MoosasGraph:
                 x_vals.append(center[0])
                 y_vals.append(center[1])
                 z_vals.append(center[2])   
-        # 计算中心点和最大范围，确保 xyz 轴比例一致
+        # Compute center and max range to ensure equal axis scales
         x_mid = (min(x_vals) + max(x_vals)) / 2
         y_mid = (min(y_vals) + max(y_vals)) / 2
         z_mid = (min(z_vals) + max(z_vals)) / 2
@@ -654,11 +654,11 @@ class MoosasGraph:
         ax.set_ylim(y_mid - max_range, y_mid + max_range)
         ax.set_zlim(z_mid - max_range, z_mid + max_range)
 
-        # 确保 xyz 轴比例一致
+        # Ensure equal aspect ratio for axes
 
 
-        # 放大显示图形
-        ax.dist = 5  # 减小该值可以放大图形，默认值通常是10
+        # Adjust view distance to zoom
+        ax.dist = 5  # Decrease this value to zoom in; default is typically 10
         legend_elements = [
             plt.Line2D([0], [0], marker='o', color='w', 
                     markerfacecolor=v, label=k if k else 'face', 

@@ -182,171 +182,6 @@ class MoosasGraph:
         """获取图中的所有边"""
         return self.graph.edges(data=True)
 
-    def graph_representation(self, root, cat, idd, normal, faces, holes, _is_cleaned=True):
-
-        faces_id = idd
-        faces_category = cat
-        faces_normal = normal
-        faces_vertices = faces
-        faces_holes = holes
-
-        spaces_id = []
-        spaces_area = []
-        
-        # 1   Create a dictionary mapping Uid and faceId, Adding face nodes (FROM .geo) and face edges (FROM .xml)
-        dict_u = {}
-
-        for elem in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
-            face_id = elem.find('faceId').text
-            uid = elem.find('Uid').text
-            
-            dict_u[uid] = [face_id]
-            if face_id in faces_id:
-                i = faces_id.index(face_id)
-            else:
-                print(f"Skipping node addition: Face '{face_id}' does not exist.")
-                continue
-
-            face = {
-                'category': faces_category[i],
-                'id': faces_id[i],
-                'normal': np.array(faces_normal[i]),
-                'vertices': np.array(faces_vertices[i])
-            }
-
-            self.faces.append(face)
-            
-            obb_params = create_obb(np.array(faces_vertices[i]), np.array(faces_normal[i]))
-            
-            # OBB.plot_obb_and_points(face['vertices'], obb_params)
-            
-            face_params = {
-                "v": face['vertices'], # 3D vertices of the OBB
-                "c": obb_params['center'], # 3D center of the OBB
-                "s": obb_params['scale'], # 3D scale of the OBB
-                "r": obb_params['rotation'], # 3x3 rotation matrix
-                "t": None, # face type: floor, wall, roof
-            }
-
-            if int(float(faces_category[i])) == 2:
-                face_params["t"] = "airwall"
-
-            if int(float(faces_category[i])) == 1 or 5 or 6:
-                face_params["t"] = "window"
-
-            self.graph.add_node(uid, node_type="face", face_params=face_params)
-
-        for face in root.findall('face') + root.findall('wall') + root.findall('glazing') + root.findall('skylight'):
-            
-            uid = face.find('Uid').text
-            glazing_element = face.find('glazingId')
-            shading_element = face.find('shadingId')
-            
-            glazingid = glazing_element.text if glazing_element is not None else None
-            shadingid = shading_element.text if shading_element is not None else None
-      
-            if glazingid is not None:
-
-                glazings = glazingid.split()
-                for glazing in glazings:
-                    face_id = face.find('faceId').text
-                    if face_id in faces_id:
-                        if glazing in self.graph.nodes:
-                            if "face_params" in self.graph.nodes[glazing]:
-                                self.graph.add_edge(uid, glazing, attr='glazing')
-                            else:
-                                print(f"Skipping edge addition: Node glazing '{glazing}' does not defined.")
-                        else:
-                                print(f"Skipping edge addition: Node glazing '{glazing}' does not exist.")
-                    else:
-                        print(f"Skipping edge addition: Face '{face_id}' does not exist.")
-                        continue
-            if shadingid is not None:
-                shadings = shadingid.split()
-                for shading in shadings:
-                    self.graph.add_edge(uid, shading, attr='shading')
-                    self.graph.nodes[shading]["face_params"]["t"] = "shading"
-                    
-            neighbors = face.find('neighbor')
-
-            if neighbors is not None:
-                for edge in neighbors.findall('edge'):
-                    edge_keys = edge.text.split()
-                    for key in edge_keys:
-                        self.graph.add_edge(uid, key)
-
-        # 2  Adding space nodes and face-space edges
-        for space in root.findall('space'):
-            
-            space_id = space.find('id').text.strip() 
-            space_area = space.find('area')
-
-            spaces_id.append(space_id)
-            spaces_area.append(space_area)
-
-            if space.find('is_void').text == 'False':  
-                self.graph.add_node(space_id, node_type="space") 
-            else:
-                self.graph.add_node(space_id, node_type="void")
- 
-
-            # Find all <topology> nodes under the <space> node, add edges, and the surface attribute
-            topology = space.find('topology')
-            
-            space_boundary_verts = []
-
-            if topology is not None:
-                floors = topology.find('floor/face')
-                if floors is not None:
-                    floors_id = floors.text
-                    if floors_id in self.graph.nodes:
-                        self.graph.nodes[floors_id]["face_params"]["t"] = "floor"
-                        self.graph.add_edge(space_id, floors_id, attr='floor')
-                        space_boundary_verts.append(self.graph.nodes[floors_id]["face_params"]["v"])
-                    else:
-                        print(f"Skipping edge addition: Node floor '{floors_id}' does not exist.")
-
-                ceilings = topology.find('ceiling/face')
-                if ceilings is not None:
-                    ceilings_id = ceilings.text
-                    if ceilings_id in self.graph.nodes:
-                        self.graph.nodes[ceilings_id]["face_params"]["t"] = "floor"
-                        self.graph.add_edge(space_id, ceilings_id, attr='ceiling')
-                        space_boundary_verts.append(self.graph.nodes[ceilings_id]["face_params"]["v"])
-                    else:
-                        print(f"Skipping edge addition: Node ceiling '{ceilings_id}' does not exist.")
-
-                walls = topology.findall('edge/wall')
-                for wall in walls:
-                    wall_id = wall.find('Uid').text
-                    if wall_id in self.graph.nodes:
-                        self.graph.nodes[wall_id]["face_params"]["t"] = "wall"
-                        self.graph.add_edge(space_id, wall_id, attr='wall')
-                        space_boundary_verts.append(self.graph.nodes[wall_id]["face_params"]["v"])
-                    else:
-                        print(f"Skipping edge addition: Node wall '{wall_id}' does not exist.")
-
-            obb_params = create_obb(np.concatenate(space_boundary_verts, axis=0), np.array([0,0,1]))
-            #OBB.plot_obb_and_points(np.concatenate(space_boundary_verts, axis=0), obb_params)
-
-            space_params = {
-                "c": obb_params['center'],
-                "s": obb_params['scale'],
-                "r": obb_params['rotation'],
-                "a": space_area.text
-            }
-
-            self.graph.nodes[space_id]["space_params"] = space_params
-
-
-        #3  clean the graph nodes without edges
-        if _is_cleaned:
-            for node in list(self.graph.nodes()):
-                if self.graph.degree(node) == 0:
-                    self.graph.remove_node(node)
-                    print (f"Removing node: {node}")
-
-
     def graph_representation_new(self, root, cat, idd, normal, faces, holes):
 
         dict_u = {}
@@ -527,58 +362,68 @@ class MoosasGraph:
 
         return self.graph
 
-    def graph_edit(self, _isolated_clean=True, _airwall_clean=True):
-        """图结构编辑"""
-        # Remove isolated nodes
-        if _isolated_clean:
-            for node in list(self.graph.nodes()):
-                if self.graph.degree(node) == 0:
-                    self.graph.remove_node(node)
-                    print (f"Removing node: {node}")
+    def clean_isolated_nodes(self):
+        for node in list(self.graph.nodes()):
+            if self.graph.degree(node) == 0:
+                self.graph.remove_node(node)
+                print (f"Removing node: {node}")
 
-        # Remove airwall nodes
-        if _airwall_clean:
-            # 找到所有 airwall 节点
-            airwalls = [
-                n for n, d in self.graph.nodes(data=True)
-                if d.get("node_type") == "face"
-                and d.get("face_params", {}).get("t") == "airwall"
-            ]
+    def clean_airwall_nodes(self):
+        # 找到所有 airwall 节点
+        airwalls = [
+            n for n, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "face"
+            and d.get("face_params", {}).get("t") == "airwall"
+        ]
 
-            for airwall in airwalls:
-                if airwall not in self.graph:
+        for airwall in airwalls:
+            if airwall not in self.graph:
+                continue
+
+            # 找到与 airwall 相连的所有邻居
+            neighbors = list(self.graph.neighbors(airwall))
+
+            for nbr in neighbors:
+                if nbr == airwall:
                     continue
 
-                # 找到与 airwall 相连的所有邻居
-                neighbors = list(self.graph.neighbors(airwall))
+                # 跳过邻居本身是 airwall 的情况
+                nbr_data = self.graph.nodes[nbr]
+                if nbr_data.get("node_type") == "face" and \
+                nbr_data.get("face_params", {}).get("t") == "airwall":
+                    continue
 
-                for nbr in neighbors:
-                    if nbr == airwall:
+                # 把 nbr 的所有边“转接”到 airwall
+                nbr_neighbors = list(self.graph.neighbors(nbr))
+                for nn in nbr_neighbors:
+                    if nn == airwall or nn == nbr:
                         continue
 
-                    # 跳过邻居本身是 airwall 的情况
-                    nbr_data = self.graph.nodes[nbr]
-                    if nbr_data.get("node_type") == "face" and \
-                    nbr_data.get("face_params", {}).get("t") == "airwall":
-                        continue
+                    # 添加新边：airwall — nn
+                    if not self.graph.has_edge(airwall, nn):
+                        self.graph.add_edge(airwall, nn)
 
-                    # 把 nbr 的所有边“转接”到 airwall
-                    nbr_neighbors = list(self.graph.neighbors(nbr))
-                    for nn in nbr_neighbors:
-                        if nn == airwall or nn == nbr:
-                            continue
+                # 删除 airwall — nbr 这条边
+                if self.graph.has_edge(airwall, nbr):
+                    self.graph.remove_edge(airwall, nbr)
 
-                        # 添加新边：airwall — nn
-                        if not self.graph.has_edge(airwall, nn):
-                            self.graph.add_edge(airwall, nn)
+                # 删除 nbr 节点
+                if nbr in self.graph:
+                    self.graph.remove_node(nbr)
+    
+    def embedd_outer_layer_edges(self):
+        pass  # TODO: 实现外层边嵌入功能
+    
+    def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=False):
+        """图结构编辑"""
+        if _isolated_clean:
+            self.clean_isolated_nodes()
 
-                    # 删除 airwall — nbr 这条边
-                    if self.graph.has_edge(airwall, nbr):
-                        self.graph.remove_edge(airwall, nbr)
+        if _airwall_clean:
+            self.clean_airwall_nodes()
 
-                    # 删除 nbr 节点
-                    if nbr in self.graph:
-                        self.graph.remove_node(nbr)
+        if _outer_layer_edge_embedding:
+            pass  # TODO: 实现外层边嵌入功能
         return self.graph
 
     def draw_graph_3d(self, file_path, _fig_show =False):

@@ -452,10 +452,10 @@ class MoosasGraph:
                                 transparent_nodes.add(neighbor)
             current_layer_faces.update(transparent_nodes)
             if not current_layer_faces:
-                print ("No more outer layer faces found. Stopping recursion.")
+                print ("    No more outer layer faces found. Stopping recursion.")
                 break
 
-            print(f"   Processing layer {layer} with {len(current_layer_faces)} face nodes")
+            print(f"    Processing layer {layer} with {len(current_layer_faces)} face nodes")
             # 标记face节点l=layer
             for face_node in current_layer_faces:
                 G.nodes[face_node]["face_params"]["l"] = layer

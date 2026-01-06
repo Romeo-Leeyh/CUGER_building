@@ -124,22 +124,6 @@ def read_xml(file_path):
     root = tree.getroot()
     return root
 
-def write_adjson (file_path, data):
-    try:
-        with open(file_path, "w", encoding='utf-8') as f:
-            f.write(data)
-    except Exception as e:
-        print(f"Error writing to file {file_path}: {e}")
-
-def read_adjson (file_path):
-    try:
-        with open(file_path, "r", encoding='utf-8') as f:
-            data = f.read()
-            return data
-    except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
-        return None
-
 class NumpyEncoder(json.JSONEncoder):
     """
         JSON encoder that handles numpy arrays
@@ -153,7 +137,7 @@ class NumpyEncoder(json.JSONEncoder):
             return int(obj)
         return super().default(obj)
 
-def graph_to_json(graph, output_dir):
+def graph_to_json(graph, output_path):
     """
         Dumps graph data to JSON files
     """
@@ -168,52 +152,47 @@ def graph_to_json(graph, output_dir):
             else:
                 node_data[key] = value.tolist() if isinstance(value, np.ndarray) else value
         nodes_data[str(node_id)] = node_data
-    
-    # Prepare edge data
-    edges_data = {}
+
+    # Prepare edge data as a list
+    edges_list = []
     for u, v, edge_attrs in graph.graph.edges(data=True):
-        edge_id = f"{u}_{v}"
-        edges_data[edge_id] = {
+        edges_list.append({
             "source": str(u),
             "target": str(v),
             "attributes": edge_attrs
-        }
-    
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    # Write to JSON files
-    with open(output_path / "nodes.json", "w", encoding="utf-8") as f:
-        json.dump(nodes_data, f, indent=4, cls=NumpyEncoder)
-    
-    with open(output_path / "edges.json", "w", encoding="utf-8") as f:
-        json.dump(edges_data, f, indent=4, cls=NumpyEncoder)
+        })
 
-def json_to_graph(input_dir):
-    """Reconstructs graph data from JSON files.
-    
+    # Combine into single JSON
+    graph_data = {
+        "nodes": nodes_data,
+        "edges": edges_list
+    }
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(graph_data, f, indent=4, cls=NumpyEncoder)
+
+def json_to_graph(input_path):
+    """Reconstructs graph data from a single JSON file.
+
     Parameters:
-        input_dir (str): JSON files directory.
-        
+        input_dir (str): Directory containing `graph.json`.
+
     Returns:
         nx.Graph: Reconstructed NetworkX graph.
     """
-    input_path = Path(input_dir)
-    
-    # Read node data
-    with open(input_path / "nodes.json", "r", encoding="utf-8") as f:
-        nodes_data = json.load(f)
-    
-    # Read edge data
-    with open(input_path / "edges.json", "r", encoding="utf-8") as f:
-        edges_data = json.load(f)
-    
+
+    # Read combined graph data
+    with open(input_path, "r", encoding="utf-8") as f:
+        graph_data = json.load(f)
+
+    nodes_data = graph_data.get("nodes", {})
+    edges_list = graph_data.get("edges", [])
+
     # Construct the graph
     G = nx.Graph()
-    
+
     # Add nodes and attributes
     for node_id, node_attrs in nodes_data.items():
-        
         processed_attrs = {}
         for key, value in node_attrs.items():
             if isinstance(value, dict):
@@ -222,14 +201,14 @@ def json_to_graph(input_dir):
             else:
                 processed_attrs[key] = np.array(value) if isinstance(value, list) else value
         G.add_node(node_id, **processed_attrs)
-    
+
     # Add edges and attributes
-    for edge_id, edge_data in edges_data.items():
-        source = edge_data["source"]
-        target = edge_data["target"]
-        attributes = edge_data["attributes"]
+    for edge_data in edges_list:
+        source = edge_data.get("source")
+        target = edge_data.get("target")
+        attributes = edge_data.get("attributes", {})
         G.add_edge(source, target, **attributes)
-    
+
     return G
 
 

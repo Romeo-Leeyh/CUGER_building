@@ -17,7 +17,7 @@ def get_output_paths(modelname, output_dir):
     """
     paths = {
         "convex_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
-        "output_json_path": os.path.join(output_dir, "graph", f"{modelname}"),
+        "output_graph_path": os.path.join(output_dir, "graph", f"{modelname}.json"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
         "new_geo_path": os.path.join(output_dir, "new_geo", f"{modelname}.geo"),
         "new_idf_path": os.path.join(output_dir, "new_idf", f"{modelname}.idf"),
@@ -38,7 +38,7 @@ def get_output_paths(modelname, output_dir):
 def convex_process(input_geo_path, output_geo_path, figure_path=None):
     """
     Perform convexification on the input geometry file and save the result.
-
+ 
     Args:
         input_geo_path (str): Path to the input geometry file.
         output_geo_path (str): Path to save the convexified geometry file.

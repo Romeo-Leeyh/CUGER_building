@@ -20,6 +20,7 @@ SPACE_PARAM_TEMPLATE = {
     "c": None,
     "s": None,
     "r": None,
+    "l": 0,         # indicates whether the face is exposed to the outside
 }
 
 def create_obb(points, normal, min_scale = 0.1):
@@ -411,128 +412,84 @@ class MoosasGraph:
                 if nbr in self.graph:
                     self.graph.remove_node(nbr)
     
-    def embed_outer_layer_edges(self, layers: int=3):
+    def embed_outer_layer_edges(self, max_layers: int=3):
         """
-        Assign layer attributes to face nodes and space-face edges in the building graph.
-        Identify external faces using topology instead of relying on face type.
-
-        Parameters:
-            layers: int - maximum number of layers to mark
-
-        Topological identification logic:
-            1. External face nodes typically connect to only one space (single-sided)
-            2. Internal face nodes usually connect to two spaces (partitioning faces)
-            3. window/airwall nodes may not directly connect to spaces and can propagate via 'adjacent' relations
-            4. Expand from the outermost layer inward layer by layer until reaching the specified depth
+        递归识别建筑图的多层外壳节点。
+        1. 检测最外围直接与外界接触的节点（face只与一个space连接），并把与这些face连接的space节点的l记为当前层，透明节点l也记为当前层。
+        2. 在临时子图中移除所有l为当前层的space节点及其边，以及l为当前层的透明face节点及其边。
+        3. 递归处理下一层，直到没有新节点或达到最大层数。
         """
-        # Initialize layer 0 for all face nodes
+        # 初始化所有节点的l为0
         for node, data in self.graph.nodes(data=True):
             if data.get("node_type") == "face":
                 data["face_params"]["l"] = 0
-        
-        # Sets to record processed faces and spaces
-        processed_faces = set()
-        processed_spaces = set()
-        
-        # ========== Layer 1: find outermost face nodes ==========
-        # Strategy: find faces connected to only one space (topological outside)
-        current_layer_faces = set()
-        
-        for node, data in self.graph.nodes(data=True):
-            if data.get("node_type") == "face":
-                # Count number of connected space/void neighbors
-                connected_spaces = []
-                for neighbor in self.graph.neighbors(node):
-                    neighbor_data = self.graph.nodes[neighbor]
-                    if neighbor_data.get("node_type") in ["space", "void"]:
-                        connected_spaces.append(neighbor)
-                
-                # Faces connected to only one space are considered outer faces
-                if len(connected_spaces) == 1:
-                    current_layer_faces.add(node)
-        
-        # Expand: find window/airwall nodes adjacent to outer faces
-        # These transparent nodes may not directly connect to spaces but are considered external
-        transparent_nodes = set()
-        for face_node in current_layer_faces:
-            for neighbor in self.graph.neighbors(face_node):
-                neighbor_data = self.graph.nodes[neighbor]
-                if neighbor_data.get("node_type") == "face":
-                    # Check if it is a transparent node
-                    face_type = neighbor_data.get("face_params", {}).get("t")
-                    if face_type in ["window", "airwall"]:
-                        edge_data = self.graph.get_edge_data(face_node, neighbor)
-                        if edge_data and edge_data.get("adj") == "adjacent":
-                            transparent_nodes.add(neighbor)
-        
-        # Include transparent nodes in the outermost layer
-        current_layer_faces.update(transparent_nodes)
-        
-        # If no outer nodes are found (edge case), use fallback strategy
-        if not current_layer_faces:
-            # Fallback: find face nodes with minimum degree
-            face_degrees = []
-            for node, data in self.graph.nodes(data=True):
+            if data.get("node_type") in ["space", "void"]:
+                data["space_params"]["l"] = 0
+
+        G = self.graph
+        layer = 1
+        # 用于递归的临时子图
+        temp_graph = G.copy()
+        while layer <= max_layers:
+            # 1. 找到当前子图中所有只与一个space节点连接的face节点
+            current_layer_faces = set()
+            for node, data in temp_graph.nodes(data=True):
                 if data.get("node_type") == "face":
-                    degree = self.graph.degree(node)
-                    face_degrees.append((node, degree))
-            
-            if face_degrees:
-                min_degree = min(deg for _, deg in face_degrees)
-                current_layer_faces = {node for node, deg in face_degrees if deg == min_degree}
-        
-        # ========== Start layered processing ==========
-        for layer in range(1, layers + 1):
-            print (f"   Processing layer {layer} with {len(current_layer_faces)} face nodes")
-            if not current_layer_faces:
-                # No more face nodes to process, exit early
-                print ("    No more face nodes to process at layer", layer)
-                break
-            
-            # Assign layer number to faces in the current layer
+                    connected_spaces = [nbr for nbr in temp_graph.neighbors(node)
+                                        if temp_graph.nodes[nbr].get("node_type") == "space"]
+                    if len(connected_spaces) == 1:
+                        current_layer_faces.add(node)
+            # 查找与这些face通过adjacent边直接连接的透明节点
+            transparent_nodes = set()
             for face_node in current_layer_faces:
-                if face_node not in processed_faces:
-                    self.graph.nodes[face_node]["face_params"]["l"] = layer
-                    processed_faces.add(face_node)
-            
-            # Find space nodes connected to current faces and add layer attribute to space-face edges
+                for neighbor in temp_graph.neighbors(face_node):
+                    neighbor_data = temp_graph.nodes[neighbor]
+                    if neighbor_data.get("node_type") == "face":
+                        face_type = neighbor_data.get("face_params", {}).get("t")
+                        if face_type in ["window", "airwall"]:
+                            edge_data = temp_graph.get_edge_data(face_node, neighbor)
+                            if edge_data and edge_data.get("adj") in ["adjacent", "glazing"]:
+                                transparent_nodes.add(neighbor)
+            current_layer_faces.update(transparent_nodes)
+            if not current_layer_faces:
+                print ("No more outer layer faces found. Stopping recursion.")
+                break
+
+            print(f"   Processing layer {layer} with {len(current_layer_faces)} face nodes")
+            # 标记face节点l=layer
+            for face_node in current_layer_faces:
+                G.nodes[face_node]["face_params"]["l"] = layer
+            # 标记与这些face连接的space节点l=layer
             current_layer_spaces = set()
             for face_node in current_layer_faces:
-                for neighbor in self.graph.neighbors(face_node):
-                    neighbor_data = self.graph.nodes[neighbor]
-                    if neighbor_data.get("node_type") in ["space", "void"]:
-                        if neighbor not in processed_spaces:
-                            current_layer_spaces.add(neighbor)
-                            # add layer attribute to space-face edges
-                            if self.graph.has_edge(neighbor, face_node):
-                                self.graph[neighbor][face_node]["layer"] = layer
-            
-            processed_spaces.update(current_layer_spaces)
-            
-            # ========== Find next layer face nodes ==========
-            next_layer_faces = set()
-            for space_node in current_layer_spaces:
-                for neighbor in self.graph.neighbors(space_node):
-                    neighbor_data = self.graph.nodes[neighbor]
-                    if neighbor_data.get("node_type") == "face":
-                        if neighbor not in processed_faces:
-                            # Directly add this face node
-                            next_layer_faces.add(neighbor)
-                            
-                            # If it's a transparent node, also find faces adjacent to it
-                            face_type = neighbor_data.get("face_params", {}).get("t")
-                            if face_type in ["window", "airwall"]:
-                                for trans_neighbor in self.graph.neighbors(neighbor):
-                                    trans_neighbor_data = self.graph.nodes[trans_neighbor]
-                                    if trans_neighbor_data.get("node_type") == "face":
-                                        if trans_neighbor not in processed_faces:
-                                            edge_data = self.graph.get_edge_data(neighbor, trans_neighbor)
-                                            if edge_data and edge_data.get("adj") == "adjacent":
-                                                next_layer_faces.add(trans_neighbor)
-            
-            # Move to the next layer
-            current_layer_faces = next_layer_faces
-        
+                for neighbor in G.neighbors(face_node):
+                    neighbor_data = G.nodes[neighbor]
+                    if neighbor_data.get("node_type") == "space":
+                        G.nodes[neighbor]["space_params"]["l"] = layer
+                        current_layer_spaces.add(neighbor)
+            # 标记透明节点l=layer
+            for face_node in current_layer_faces:
+                face_type = G.nodes[face_node].get("face_params", {}).get("t")
+                if face_type in ["window", "airwall"]:
+                    G.nodes[face_node]["face_params"]["l"] = layer
+            # 标记space-face边layer属性
+            for face_node in current_layer_faces:
+                for neighbor in G.neighbors(face_node):
+                    if G.nodes[neighbor].get("node_type") == "space":
+                        if G.has_edge(neighbor, face_node):
+                            G[neighbor][face_node]["layer"] = layer
+            # 2. 在临时子图中移除所有l为当前层的space节点及其边，以及l为当前层的透明face节点及其边
+            remove_nodes = set()
+            for node in temp_graph.nodes:
+                if temp_graph.nodes[node].get("node_type") == "space":
+                    if G.nodes[node]["space_params"]["l"] == layer:
+                        remove_nodes.add(node)
+                if temp_graph.nodes[node].get("node_type") == "face":
+                    face_type = temp_graph.nodes[node].get("face_params", {}).get("t")
+                    if face_type in ["window", "airwall"] and G.nodes[node]["face_params"]["l"] == layer:
+                        remove_nodes.add(node)
+            temp_graph.remove_nodes_from(remove_nodes)
+            layer += 1
         return self.graph
     
     def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=True):

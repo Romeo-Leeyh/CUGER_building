@@ -16,7 +16,7 @@ def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
 
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
-    
+    """
     ps.convex_process(input_geo_path, paths["convex_geo_path"], paths["figure_convex_path"])
 
     model = Moosas.transform(paths["convex_geo_path"], 
@@ -31,8 +31,8 @@ def process_file(input_geo_path, modelname):
     Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
     Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
     Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
-    
-    ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
+    """
+    ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_graph_path"], paths["figure_graph_path"])
 
     
 

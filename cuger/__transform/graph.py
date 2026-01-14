@@ -412,14 +412,21 @@ class MoosasGraph:
                 if nbr in self.graph:
                     self.graph.remove_node(nbr)
     
-    def embed_outer_layer_edges(self, max_layers: int=3):
+    def embed_outer_layer_edges(self, max_layers: int = 3):
         """
-        递归识别建筑图的多层外壳节点。
-        1. 检测最外围直接与外界接触的节点（face只与一个space连接），并把与这些face连接的space节点的l记为当前层，透明节点l也记为当前层。
-        2. 在临时子图中移除所有l为当前层的space节点及其边，以及l为当前层的透明face节点及其边。
-        3. 递归处理下一层，直到没有新节点或达到最大层数。
+        Recursively identify multi-layer outer shell nodes in the building graph.
+        
+        Logic Update:
+        - Layer 1: Detect outermost nodes (faces connected to 1 space) + connected transparent nodes.
+        - Layer > 1: Detect nodes connected to 1 space IF AND ONLY IF:
+        (The node itself is transparent OR The node is connected to a transparent node).
+        
+        Args:
+            max_layers (int): Maximum number of layers to mark. Default is 3.
+        Returns:
+            networkx.Graph: The graph with updated layer attributes.
         """
-        # 初始化所有节点的l为0
+        # Initialize all node layer attributes to 0
         for node, data in self.graph.nodes(data=True):
             if data.get("node_type") == "face":
                 data["face_params"]["l"] = 0
@@ -428,18 +435,53 @@ class MoosasGraph:
 
         G = self.graph
         layer = 1
-        # 用于递归的临时子图
+        # Temporary subgraph for recursion
         temp_graph = G.copy()
+        
         while layer <= max_layers:
-            # 1. 找到当前子图中所有只与一个space节点连接的face节点
-            current_layer_faces = set()
+            # --- Step A: Candidate Detection ---
+            # Find all face nodes in the current subgraph that are only connected to one space node
+            candidates = set()
             for node, data in temp_graph.nodes(data=True):
                 if data.get("node_type") == "face":
                     connected_spaces = [nbr for nbr in temp_graph.neighbors(node)
-                                        if temp_graph.nodes[nbr].get("node_type") == "space"]
+                                    if temp_graph.nodes[nbr].get("node_type") == "space"]
                     if len(connected_spaces) == 1:
-                        current_layer_faces.add(node)
-            # 查找与这些face通过adjacent边直接连接的透明节点
+                        candidates.add(node)
+            
+            # --- Step B: Logic Filtering (The requested change) ---
+            current_layer_faces = set()
+            
+            for face_node in candidates:
+                # Condition 1: Layer 1 always accepts outermost nodes
+                if layer == 1:
+                    current_layer_faces.add(face_node)
+                else:
+                    # Condition 2: Layer > 1 requires transparency or connection to transparency
+                    
+                    # Check 2.1: Is the node itself transparent?
+                    face_data = temp_graph.nodes[face_node]
+                    face_type = face_data.get("face_params", {}).get("t")
+                    is_self_transparent = face_type in ["window", "airwall"]
+                    
+                    # Check 2.2: Is it connected to a transparent node?
+                    has_transparent_neighbor = False
+                    if not is_self_transparent: # Optimization: only check neighbors if self is not transparent
+                        for neighbor in temp_graph.neighbors(face_node):
+                            neighbor_data = temp_graph.nodes[neighbor]
+                            if neighbor_data.get("node_type") == "face":
+                                n_type = neighbor_data.get("face_params", {}).get("t")
+                                if n_type in ["window", "airwall"]:
+                                    edge_data = temp_graph.get_edge_data(face_node, neighbor)
+                                    if edge_data and edge_data.get("adj") in ["adjacent", "glazing"]:
+                                        has_transparent_neighbor = True
+                                        break
+                    
+                    if is_self_transparent or has_transparent_neighbor:
+                        current_layer_faces.add(face_node)
+
+            # --- Step C: Expand to connected transparent nodes ---
+            # (This logic remains to ensure the transparent "clusters" are fully captured)
             transparent_nodes = set()
             for face_node in current_layer_faces:
                 for neighbor in temp_graph.neighbors(face_node):
@@ -450,46 +492,62 @@ class MoosasGraph:
                             edge_data = temp_graph.get_edge_data(face_node, neighbor)
                             if edge_data and edge_data.get("adj") in ["adjacent", "glazing"]:
                                 transparent_nodes.add(neighbor)
+            
             current_layer_faces.update(transparent_nodes)
+
+            # Check if we should stop
             if not current_layer_faces:
-                print ("    No more outer layer faces found. Stopping recursion.")
+                print(f"    No more valid outer layer faces found at layer {layer}. Stopping recursion.")
                 break
 
             print(f"    Processing layer {layer} with {len(current_layer_faces)} face nodes")
-            # 标记face节点l=layer
+
+            # --- Step D: Marking attributes in the original Graph G ---
+            # Mark face nodes' l = layer
             for face_node in current_layer_faces:
                 G.nodes[face_node]["face_params"]["l"] = layer
-            # 标记与这些face连接的space节点l=layer
+            
+            # Mark connected space nodes' l = layer
             current_layer_spaces = set()
             for face_node in current_layer_faces:
                 for neighbor in G.neighbors(face_node):
                     neighbor_data = G.nodes[neighbor]
                     if neighbor_data.get("node_type") == "space":
+                        # Only mark if not already marked (or overwrite, depends on preference, here overwrite is fine)
                         G.nodes[neighbor]["space_params"]["l"] = layer
                         current_layer_spaces.add(neighbor)
-            # 标记透明节点l=layer
+            
+            # Mark transparent nodes' l = layer (Redundant but safe: ensured by set update above)
             for face_node in current_layer_faces:
                 face_type = G.nodes[face_node].get("face_params", {}).get("t")
                 if face_type in ["window", "airwall"]:
                     G.nodes[face_node]["face_params"]["l"] = layer
-            # 标记space-face边layer属性
+
+            # Mark space-face edge layer attribute
             for face_node in current_layer_faces:
                 for neighbor in G.neighbors(face_node):
                     if G.nodes[neighbor].get("node_type") == "space":
                         if G.has_edge(neighbor, face_node):
                             G[neighbor][face_node]["layer"] = layer
-            # 2. 在临时子图中移除所有l为当前层的space节点及其边，以及l为当前层的透明face节点及其边
+
+            # --- Step E: Peeling (Remove from temp_graph) ---
+            # Remove all space nodes with l == layer and their edges
+            # Remove all transparent face nodes with l == layer and their edges
             remove_nodes = set()
             for node in temp_graph.nodes:
                 if temp_graph.nodes[node].get("node_type") == "space":
                     if G.nodes[node]["space_params"]["l"] == layer:
                         remove_nodes.add(node)
+                
                 if temp_graph.nodes[node].get("node_type") == "face":
                     face_type = temp_graph.nodes[node].get("face_params", {}).get("t")
+                    # Note: We only peel transparent faces, solid faces stay to act as boundaries for next layer
                     if face_type in ["window", "airwall"] and G.nodes[node]["face_params"]["l"] == layer:
                         remove_nodes.add(node)
+            
             temp_graph.remove_nodes_from(remove_nodes)
             layer += 1
+            
         return self.graph
     
     def graph_edit(self, _isolated_clean=True, _airwall_clean=True, _outer_layer_edge_embedding=True):

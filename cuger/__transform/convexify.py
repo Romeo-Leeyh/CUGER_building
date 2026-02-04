@@ -295,22 +295,50 @@ class GeometryOperator:
     def reorder_vertices(face, is_upward):
         """Re-order vertices of a face to make the normal face upward or downward.
         
+        This function ensures:
+        1. Vertex order is normalized (counter-clockwise when viewed from above)
+        2. The face starts from a consistent reference point (minimum sum of coordinates)
+        3. Vertex direction matches the expected is_upward orientation
+        
         Args:
             face: numpy array, shape=(n, 3), sequence of vertices of a face
-            is_upward: bool，True for upward, False for downward
+            is_upward: bool, True for upward (CCW from above), False for downward (CW from above)
         
         Returns:
-            reordered_face: numpy array, shape=(n, 3)
+            reordered_face: numpy array, shape=(n, 3), properly ordered vertices
         """
-        # calculate the sum of x, y, z of each vertex
+        face = np.asarray(face, dtype=float)
+        
+        # Find the reference point (minimum sum of x, y, z coordinates)
         sum_xyz = np.sum(face, axis=1)
         min_index = np.argmin(sum_xyz)
         
-        # reorder the vertices based on the minimum index
-        if is_upward:
-            face = np.roll(face, -min_index, axis=0)
-        else:
-            face = np.roll(face, -min_index + face.shape[0] - 1, axis=0)[::-1]
+        # Rotate face to start from the reference point
+        face = np.roll(face, -min_index, axis=0)
+        
+        # Compute the signed area in 2D (XY plane) to determine winding order
+        # Using the shoelace formula: positive = CCW, negative = CW
+        n = len(face)
+        signed_area = 0.0
+        for i in range(n):
+            x1, y1 = face[i][0], face[i][1]
+            x2, y2 = face[(i + 1) % n][0], face[(i + 1) % n][1]
+            signed_area += (x2 - x1) * (y2 + y1)
+        
+        # signed_area > 0 means CW, < 0 means CCW in standard XY coordinates
+        is_clockwise = signed_area > 0
+        
+        # Adjust winding order if needed
+        # For is_upward=True, we want CCW (signed_area < 0)
+        # For is_upward=False, we want CW (signed_area > 0)
+        if is_upward and is_clockwise:
+            # Need to reverse to CCW
+            face = face[::-1]
+            face = np.roll(face, -min_index, axis=0)  # Re-adjust starting point after reversal
+        elif not is_upward and not is_clockwise:
+            # Need to reverse to CW
+            face = face[::-1]
+            face = np.roll(face, -min_index, axis=0)  # Re-adjust starting point after reversal
             
         return face
     

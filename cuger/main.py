@@ -11,14 +11,14 @@ import moosas.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 
 _fig_show = False
-input = r"E:/DATA/CUGER_energy_data/geo"
-output = r"E:/DATA/CUGER_energy_data/"
+input = r"E:/DATA/CUGER_graphplus_SRT/geo"
+output = r"E:/DATA/CUGER_graphplus_SRT/"
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)
     if os.path.exists(paths["new_idf_path"]):
         print(f"--Skip-- | {modelname}")
-        #return
+        return
     print(f"Processing file: {input_geo_path}, basename: {modelname}")
     
     try:
@@ -35,9 +35,9 @@ def process_file(input_geo_path, modelname):
         Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
 
 
-        ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_json_path"], paths["figure_graph_path"])
+        ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], paths["output_graph_path"], paths["figure_graph_path"])
 
-        Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+        #Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
         Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
         
     except ValueError as e:

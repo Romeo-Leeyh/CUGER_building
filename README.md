@@ -45,9 +45,7 @@ tests
     ├── figure_convex       # Convex decomposition figures
     ├── figure_graph        # Graph visualization figures
     ├── geo_c               # Convex converted geometric files
-    ├── graph/example0
-    │ ├── edges.json        # Generated graph edges
-    │ └── nodes.json        # Generated graph nodes
+    ├── graph               # Generated graph nodes and edges
     ├── new_geo             # Exported .geo files
     ├── new_idf             # Exported .idf files
     ├── new_rdf             # Exported .rdf files
@@ -83,9 +81,9 @@ CUGER operates through a series of processing modules. Each module consumes spec
 #### **Graph Outputs**
 
 
-- **`graph/<case_name>/nodes.json`**  
+- **`graph/<case_name>.json`**  
   Encodes all nodes (faces, spaces, openings, etc.) with geometric, semantic, and topological attributes.
-- **`graph/<case_name>/edges.json`**  
+  
   Encodes adjacency relations, directional edges, and multi-scale topology for downstream GNN tasks.
 
 <div style="display: flex; gap: 0pt;">
@@ -121,6 +119,20 @@ Developing...
 If you used this project in your research, please cite the paper below:
 
 ```bibtex
+@article{liGeometryGraphAutomation2026,
+  title = {From Geometry to Graph: {{Automation}} of Building Performance Modeling via Convex Graph Encoding},
+  shorttitle = {From Geometry to Graph},
+  author = {Li, Yihui and Xiao, Jun and Zhou, Hao and Lin, Borong},
+  year = 2026,
+  month = mar,
+  journal = {Automation in Construction},
+  volume = {183},
+  pages = {106815},
+  issn = {0926-5805},
+  doi = {10.1016/j.autcon.2026.106815},
+}
+
+
 @inproceedings{Li2024GraphConvex,
     author    = {Li, Yihui and Xiao, Jun and Zhou, Hao and Lin, Borong.},
     title     = {A Cross-Scale Normative Encoding Representation Method for 3D Building Models Suitable for Graph Neural Networks},

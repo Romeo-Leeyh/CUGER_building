@@ -1,3 +1,7 @@
+"""
+    This module defines the MoosasGraph class, which constructs a graph representation of building spaces and faces based on the provided geo file data. The graph captures the relationships between spaces and their bounding faces, as well as the attributes of those faces (e.g., type, geometry). The class includes methods for building the graph, cleaning isolated nodes, merging airwall nodes, embedding outer layer edges, and visualizing the graph in 3D.
+"""
+
 import os
 import pygeos
 import networkx as nx

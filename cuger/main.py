@@ -11,8 +11,8 @@ import moosas.MoosasPy as Moosas
 user_profile = os.environ['USERPROFILE']
 
 _fig_show = False
-input = r"E:/DATA/CUGER_graphplus_SRT/geo"
-output = r"E:/DATA/CUGER_graphplus_SRT/"
+input = r"D:/BaiduSyncdisk/Research/202602BuildingMesh/Test/output-geo"
+output = r"D:/BaiduSyncdisk/Research/202602BuildingMesh/Test/cuger"
 
 def process_file(input_geo_path, modelname):
     paths = ps.get_output_paths(modelname, output)

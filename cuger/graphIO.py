@@ -86,7 +86,7 @@ def read_geo(file_path):
     # Return the parsed data
     return np.array(cat), idd, np.array(normal), faces, holes
 
-def write_geo(file_path, cat, idd, normal, faces):
+def write_geo(file_path, cat, idd, normal, faces, holes=None):
     """
     Write categories, IDs, normal vectors, and polygon face information to a .geo file.
 
@@ -96,6 +96,7 @@ def write_geo(file_path, cat, idd, normal, faces):
         idd (list): List of IDs.
         normal (list): List of normal vectors.
         faces (list): List of polygon face information.
+        holes (list): List of hole information for each face.
     """
     try:
         with open(file_path, "w", encoding='utf-8') as f:
@@ -111,7 +112,12 @@ def write_geo(file_path, cat, idd, normal, faces):
                 for vertex in faces[i]:
                     f.write(f"fv,{vertex[0]},{vertex[1]},{vertex[2]}\n")
                 
-                
+                # Write hole information if available
+                if holes and holes[i] is not None:
+                    for hole_id, hole_vertices in holes[i].items():
+                        for vertex in hole_vertices:
+                            f.write(f"fh,{hole_id},{vertex[0]},{vertex[1]},{vertex[2]}\n")
+
                 # Write a separator if it's not the last face
                 if i != len(cat) - 1:
                     f.write(";\n")

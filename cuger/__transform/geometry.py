@@ -1,20 +1,17 @@
 """
-    This module implements the convexification process for polygonal faces in a building model. The main function, `convexify_faces`, takes in a batch of faces and their associated holes, performs geometric normalization, merges holes into the faces, and then applies a convex decomposition algorithm to generate convex sub-faces. Additionally, it creates quadrilateral air-wall patches along the divide lines generated during the convexification process. The function returns the convexified faces and the corresponding air-wall patches.
+Geometry utilities module for convexification and simplification operations.
+Contains basic geometry classes, validators, and operators.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
+import pygeos
 from typing import Union, List, Tuple, Optional
 from collections import defaultdict
+from scipy.spatial.transform import Rotation as R
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Import geometry classes from geometry module
-from .geometry import GeometryBasic, GeometryValidator, GeometryOperator
 
 # ============================================================================
-# GEOMET RY CLASSES (previously defined here, now imported from geometry.py)
+# GEOMETRY BASIC CLASS
 # ============================================================================
 
 class GeometryBasic:
@@ -69,7 +66,7 @@ class GeometryBasic:
             area += x1 * y2 - x2 * y1
         
         return abs(area) / 2.0
-        
+
 # ============================================================================
 # GEOMETRY VALIDATOR CLASS
 # ============================================================================
@@ -111,7 +108,7 @@ class GeometryValidator:
 
     @staticmethod
     def _is_intersect(a, b, c, d):
-        """Check if line segment ab _is_intersects with line segment cd."""
+        """Check if line segment ab intersects with line segment cd."""
         a_2d = a[:2]
         b_2d = b[:2]
         c_2d = c[:2]
@@ -132,45 +129,6 @@ class GeometryValidator:
     def _is_obtuse(v1, v2, v3):
         """Check if angle at v2 is obtuse."""
         return GeometryBasic.angle(v1, v2, v3) > 90
-    
-    @staticmethod
-    def _is_intersect(a, b, c, d):
-        """
-        Determine if two line segments intersect in 2D space.
-        
-        Parameters
-        ----------
-        a : array-like
-            The first endpoint of the first line segment, as a 2D point (x, y).
-        b : array-like
-            The second endpoint of the first line segment, as a 2D point (x, y).
-        c : array-like
-            The first endpoint of the second line segment, as a 2D point (x, y).
-        d : array-like
-            The second endpoint of the second line segment, as a 2D point (x, y).
-        
-        Returns
-        -------
-        bool
-            True if the two line segments intersect, False otherwise.
-        """
-
-        a_2d = a[:2]
-        b_2d = b[:2]
-        c_2d = c[:2]
-        d_2d = d[:2]
-        if GeometryValidator._is_collinear(a_2d, b_2d, c_2d):
-            return GeometryValidator._is_between(a_2d, b_2d, c_2d)
-        if GeometryValidator._is_collinear(a_2d, b_2d, d_2d):
-            return GeometryValidator._is_between(a_2d, b_2d, d_2d)
-        if GeometryValidator._is_collinear(c_2d, d_2d, a_2d):
-            return GeometryValidator._is_between(c_2d, d_2d, a_2d)
-        if GeometryValidator._is_collinear(c_2d, d_2d, b_2d):
-            return GeometryValidator._is_between(c_2d, d_2d, b_2d)
-        cd_cross = np.logical_xor(GeometryValidator._is_left_on(a_2d, b_2d, c_2d), GeometryValidator._is_left_on(a_2d, b_2d, d_2d))
-        ab_cross = np.logical_xor(GeometryValidator._is_left_on(c_2d, d_2d, a_2d), GeometryValidator._is_left_on(c_2d, d_2d, b_2d))
-        return ab_cross and cd_cross
-    
     
     @staticmethod
     def _is_valid_face(vertices, area_eps=1e-8):
@@ -348,9 +306,7 @@ class GeometryOperator:
             face = np.roll(face, -min_index, axis=0)  # Re-adjust starting point after reversal
             
         return face
-    
 
-    
     @staticmethod
     def compute_max_inscribed_quadrilateral(vertices):
         """
@@ -390,8 +346,7 @@ class GeometryOperator:
             return [vertices[idx] for idx in best_quad_indices]
         else:
             return vertices
-    
-    
+
     @staticmethod
     def process_hole(hole, faces, check_projection=True):
         """
@@ -412,21 +367,6 @@ class GeometryOperator:
         bool
             True if the hole should be skipped (i.e., it fully coincides with a face and meets projection criteria),
             False otherwise.
-        """
-        """
-        Logic to process a hole and determine if it should be skipped.
-
-        Conditions:
-        1. Hole completely coincides with a face in 3D
-        2. If check_projection is True, additionally check if projection does not overlap with other faces
-
-        Args:
-            hole: numpy array, shape (n, 3)
-            faces: list[numpy array], all face data
-            check_projection: whether to check projection overlap
-
-        Returns:
-            bool: whether to skip this hole
         """
         for other_face in faces:
             # 1. Check for complete 3D coincidence
@@ -450,7 +390,7 @@ class GeometryOperator:
                     return True
         
         return False
-    
+
     @staticmethod
     def merge_holes(verts_poly: np.ndarray, verts_holes: dict[int, np.ndarray]) -> np.ndarray:
         """
@@ -461,33 +401,17 @@ class GeometryOperator:
         verts_poly : np.ndarray
             Array of vertices representing the outer polygon boundary.
         verts_holes : dict[int, np.ndarray]
-            Dictionary mapping hole indices to their respective vertex arrays; each key is an integer 
-            identifying a hole, and the corresponding value is a NumPy array of its vertices.
+            Dictionary mapping hole indices to their respective vertex arrays.
         
         Returns
         -------
         tuple[np.ndarray, list[np.ndarray]]
-            A tuple containing:
-            - indices_all: Array of merged vertices including both polygon and hole vertices in traversal order.
-            - _is_diagonals: List of connection line segments represented as arrays of two points, 
-              each connecting a polygon vertex to a hole vertex.
-        """
-        """
-        Find the shortest valid connection line for each hole.
-        
-        Args:
-            verts_poly: outer polygon vertex coordinates
-            verts_holes: dictionary of hole vertex coordinates, key is hole index
-        
-        Returns:
-            tuple: (indices_all, _is_diagonals)
-                - indices_all: list of all vertex indices
-                - _is_diagonals: list of connection lines, each element is (hole_vertex_idx, poly_vertex_idx)
+            A tuple containing merged vertices and merge lines.
         """
         if verts_holes is None or len(verts_holes) == 0:
             return verts_poly, []
         
-        n_poly = len(verts_poly)  # Number of outer polygon vertices
+        n_poly = len(verts_poly)
         indices_poly = list(range(n_poly))
         indices_holes = {}
         verts_all = verts_poly.copy()
@@ -502,24 +426,24 @@ class GeometryOperator:
             indices_all.extend(range(offset, offset + n_hole))
             offset += n_hole
 
-        best__is_diagonals = {}  # Store the best connection for each hole
+        best_diagonals = {}
 
         # Iterate through each hole
         for hole_id, indices_hole in indices_holes.items():
             verts_hole = verts_holes[hole_id]
             n_hole = len(indices_hole)
-            min__is_diagonal_length = float('inf')
-            min__is_diagonal = None
+            min_diagonal_length = float('inf')
+            min_diagonal = None
 
             # Iterate through all vertices of current hole
             for hole_idx, hole_vert_idx in enumerate(indices_hole):
-                hole_vertex = verts_hole[hole_idx]  # Use hole_idx instead of hole_vert_idx
+                hole_vertex = verts_hole[hole_idx]
                 # Check connection with outer polygon vertices
                 for poly_idx, poly_vertex_idx in enumerate(indices_poly):
                     poly_vertex = verts_poly[poly_idx]
                     okay = True
                     
-                    # Check _is_intersection with outer polygon edges
+                    # Check intersection with outer polygon edges
                     for poly_edge in range(n_poly):
                         poly_a = verts_poly[poly_edge]
                         poly_b = verts_poly[(poly_edge + 1) % n_poly]
@@ -532,7 +456,7 @@ class GeometryOperator:
                     if not okay:
                         continue
                         
-                    # Check _is_intersection with current hole edges
+                    # Check intersection with current hole edges
                     for hole_edge in range(n_hole):
                         hole_a = verts_hole[hole_edge]
                         hole_b = verts_hole[(hole_edge + 1) % n_hole]
@@ -545,7 +469,7 @@ class GeometryOperator:
                     if not okay:
                         continue
                         
-                    # Check _is_intersection with other holes
+                    # Check intersection with other holes
                     for other_id, other_indices in indices_holes.items():
                         if other_id == hole_id:
                             continue
@@ -560,21 +484,19 @@ class GeometryOperator:
                             break
                     
                     if okay:
-                        # Calculate _is_diagonal length
-                        _is_diagonal_length = np.linalg.norm(poly_vertex - hole_vertex)
-                        if _is_diagonal_length < min__is_diagonal_length:
-                            min__is_diagonal_length = _is_diagonal_length
-                            min__is_diagonal = (poly_vertex_idx, hole_vert_idx)
+                        diagonal_length = np.linalg.norm(poly_vertex - hole_vertex)
+                        if diagonal_length < min_diagonal_length:
+                            min_diagonal_length = diagonal_length
+                            min_diagonal = (poly_vertex_idx, hole_vert_idx)
             
-            if min__is_diagonal is not None:
-                best__is_diagonals[hole_id] = min__is_diagonal
+            if min_diagonal is not None:
+                best_diagonals[hole_id] = min_diagonal
 
         # Build connection line list
-        _is_diagonals = []
-        
-        for hole_id, (p_idx, h_idx) in best__is_diagonals.items():
-            _is_diagonals.append((p_idx, h_idx))
-        _is_diagonals = sorted(_is_diagonals, key=lambda x: (x[0], -GeometryBasic.get_angle_tan(x[0], x[1], verts_all)))
+        diagonals = []
+        for hole_id, (p_idx, h_idx) in best_diagonals.items():
+            diagonals.append((p_idx, h_idx))
+        diagonals = sorted(diagonals, key=lambda x: (x[0], -GeometryBasic.get_angle_tan(x[0], x[1], verts_all)))
 
         # Build new vertex list
         verts = []
@@ -582,9 +504,9 @@ class GeometryOperator:
             verts.append(verts_all[idx])
             
             # Check if there are connection lines starting from current vertex
-            for _is_diagonal in _is_diagonals:
-                if _is_diagonal[0] == idx:
-                    hole_vertex = _is_diagonal[1]
+            for diagonal in diagonals:
+                if diagonal[0] == idx:
+                    hole_vertex = diagonal[1]
                     # Find which hole this hole vertex belongs to
                     target_hole_id = None
                     target_hole_indices = None
@@ -599,34 +521,33 @@ class GeometryOperator:
                         start_idx = target_hole_indices.index(hole_vertex)
                         n_hole = len(target_hole_indices)
                         # Add hole vertices in order
-                        for i in range(n_hole + 1):  # +1 is to return to the starting point
+                        for i in range(n_hole + 1):
                             current_idx = target_hole_indices[(start_idx + i) % n_hole]
                             verts.append(verts_all[current_idx])
                         # Add current outer vertex again to close
                         verts.append(verts_all[idx])
         
-        mergelines = [np.array([verts_all[pair[0]], verts_all[pair[1]]]) for pair in _is_diagonals]
+        mergelines = [np.array([verts_all[pair[0]], verts_all[pair[1]]]) for pair in diagonals]
 
         return np.array(verts), mergelines
-    
+
     @staticmethod
     def split_poly(verts: np.ndarray, indices: np.ndarray) -> Union[List[np.ndarray], List[Tuple[int, int]]]:
         """
-        Turn a simple polygon into a list of convex polygons that shares the same area.
-        This divide-and-conquer methods base on Arkin, Ronald C.'s report (1987).
-        "Path planning for a vision-based autonomous robot"
-
-        :param verts:       np.ndarray (#verts, 2)  a list of 2D-vertices position
-        :param indices:     np.ndarray (#vert, )    a list of polygon vertex index (to array `verts`)
-        :return:  ([np.ndarray], [(int, int)])
-            a list of indices of `verts` that constructs convex areas
-            e.g: [np.array(p1_i1, p1_i2, p1_i3, ..), np.array(p2_i1, ...), ..]
-
-            list of _is_diagonals that splits the input polygon.
-            e.g: [(diag1_a_index, diag1_b_index), ...]
+        Turn a simple polygon into a list of convex polygons.
+        
+        Parameters
+        ----------
+        verts : np.ndarray
+            Array of 2D or 3D vertices
+        indices : np.ndarray
+            Array of vertex indices forming the polygon
+            
+        Returns
+        -------
+        tuple
+            (list of convex polygon indices, list of split diagonals)
         """
-
-        # find concave vertex
         n = len(indices)
         i_concave = -1
 
@@ -638,31 +559,22 @@ class GeometryOperator:
                 i_concave = ia
                 break
 
-        # if there is no concave vertex, which means current polygon is convex. Return itself directly
         if i_concave == -1:
             return [indices], []
 
-        # Find vertex i_break that `<i_concave, i_break>` is an internal edge
         i_break = -1
-        min__is_diagonal_length = float('inf')  # initialize with infinity
+        min_diagonal_length = float('inf')
         for i in range(n):
             if i != i_concave and i != (i_concave+1) % n and i != (i_concave-1) % n:
                 if GeometryValidator._is_diagonal(verts, indices, i_concave, i):
-                    # Calculate the length of the _is_diagonal
-                    _is_diagonal_length = np.linalg.norm(verts[indices[i_concave]] - verts[indices[i]])
-
-                    # Update i_break if the current _is_diagonal is shorter
-                    if _is_diagonal_length < min__is_diagonal_length:
+                    diagonal_length = np.linalg.norm(verts[indices[i_concave]] - verts[indices[i]])
+                    if diagonal_length < min_diagonal_length:
                         i_break = i
-                        min__is_diagonal_length = _is_diagonal_length
+                        min_diagonal_length = diagonal_length
 
-        # Not find (should not happen!)
         if i_break == -1:
-            # Just keep that weird region for now
-            # TBD: raise a warning
             return [indices], []
 
-        # Split the simple polygon by <i_concave, i_break>
         indices1 = []
         indices2 = []
         i_now = i_concave
@@ -677,11 +589,9 @@ class GeometryOperator:
             i_now = (i_now + 1) % n
         indices2.append(indices[i_concave])
 
-        # keep convexifying new-ly generated two areas in a recursive manner
         i1, diag1 = GeometryOperator.split_poly(verts, indices1)
         i2, diag2 = GeometryOperator.split_poly(verts, indices2)
 
-        # merge results from recursively convexify
         ret_diag = [[i_concave, i_break]]
         for diag in diag1:
             ret_diag.append(((diag[0] + i_concave) % n, (diag[1] + i_concave) % n))
@@ -689,21 +599,9 @@ class GeometryOperator:
             ret_diag.append(((diag[0] + i_break) % n, (diag[1] + i_break) % n))
 
         result_indices = i1 + i2
-        """
-        for new_indices in [indices1, indices2]:
-            count = 0
-            for ia in range(len(new_indices)):
-                ia_prev, ia_next = (ia - 1) % n, (ia + 1) % n
-                angle = BasicOptions.angle(verts[indices[ia_prev]], verts[indices[ia]], verts[indices[ia_next]])
-                if angle > 0:
-                    count += 1
-            
-            if count > 4:    
-                return GeometryOperator.split_poly(verts, new_indices)
-        """
 
         return result_indices, ret_diag
-    
+
     @staticmethod
     def create_airwalls(divide_lines):
         """
@@ -723,7 +621,6 @@ class GeometryOperator:
         quad_faces = []
         quad_normals = []
 
-        # Get the projection coordinates and midpoint heights
         projected_lines = [line[:, :2] for line in divide_lines]
         z_lines = [(line[0, 2] + line[1, 2]) / 2 for line in divide_lines]
 
@@ -742,215 +639,159 @@ class GeometryOperator:
         # Process each group to form quadrilaterals
         for group in line_groups.values():
             if len(group) < 2:
-                continue  # Skip groups with fewer than 2 lines
+                continue
 
-            # Sort lines in the group by midpoint height
-            group.sort(key=lambda x: x[1])  # Sort by z value
+            group.sort(key=lambda x: x[1])
 
-            # Create quadrilaterals
             for k in range(len(group) - 1):
                 line1, _ = group[k]
                 line2, _ = group[k + 1]
 
-                # Skip if the two lines are geometrically identical (same endpoints)
-                if (np.allclose(line1, line2) or np.allclose(line1, line2[::-1])):
-                    continue
+                quad = np.array([line1[0], line1[1], line2[1], line2[0]])
+                quad_faces.append(quad)
+                
+                # Calculate normal
+                v1 = quad[1] - quad[0]
+                v2 = quad[3] - quad[0]
+                normal = np.cross(v1, v2)
+                norm = np.linalg.norm(normal)
+                if norm > 0:
+                    normal = normal / norm
+                quad_normals.append(normal)
 
-                quad_face = np.array([line1[0], line1[1], line2[1], line2[0]])
-                normal_vector = np.cross(line1[0] - line1[1], line1[0] - line2[0])
-                quad_normal = normal_vector / np.linalg.norm(normal_vector)
+        return quad_faces, quad_normals
 
-                quad_faces.append(quad_face)
-                quad_normals.append(quad_normal)
 
 # ============================================================================
-# MAIN CONVEXIFY 
+# OBB UTILITIES
 # ============================================================================
 
-def convexify_faces(cat, idd, normal, faces, holes, 
-                    valid_face=True, clean_quad=False):
+def create_obb(points, normal, min_scale=0.1):
     """
-    Convexify polygonal faces and generate quadrilateral air-wall patches.
-
-    This function processes a batch of polygonal faces (possibly with holes) 
-    and performs geometric normalization, hole integration, convex decomposition, 
-    and quadrilateral generation.
-
+    Create an oriented bounding box (OBB) for a set of points.
+    
     Parameters
     ----------
-    cat : list[str]
-        Category ID of each face.
-    idd : list[str]
-        Identifier of each face.
-    normal : list[array-like]
-        Normal vectors of faces.
-    faces : list[list[array-like]]
-        Vertex sequences of each face (outer boundary).
-    holes : list[list[list[array-like]]]
-        Hole vertex sequences for each face (may be empty).
-    valid_face : bool, optional
-        If True, filter out invalid faces using GeometryValidator._is_valid_face().
-        Default is False.
-    clean_quad : bool, optional
-        If True, apply quadrilateralization to newly generated convex faces.
-        Default is False.
-
+    points : np.ndarray
+        Points, shape (N, 3)
+    normal : np.ndarray
+        Normal vector, shape (3,)
+    min_scale : float
+        Minimum allowed OBB scale
+        
     Returns
     -------
-    convex_cat : list[str]
-        Categories of all resulting faces.
-    convex_idd : list[str]
-        IDs of resulting faces.
-    convex_normal : list[array-like]
-        Normals of resulting faces.
-    convex_faces : list[list[array-like]]
-        Vertex lists of resulting faces.
-    divide_lines : list[array-like]
-        All generated split/merge lines.
+    dict
+        OBB parameters including center, scale, rotation
     """
-    convex_cat = []
-    convex_idd = []
-    convex_normal = []
-    convex_faces = []
-    divide_lines = []
+    geometry = pygeos.multipoints(points)
+    z_axis = np.array([0, 0, 1])
+    z_r = normal
     
-    # Face reordering to counter-clockwise in top view
-    for idx in range(len(faces)):
-        is_upward = normal[idx][2] > 0
-        faces[idx] = GeometryOperator.reorder_vertices(faces[idx], is_upward=is_upward)
-        if holes[idx]:
-            for i in range(len(holes[idx])):
-                holes[idx][i] = GeometryOperator.reorder_vertices(holes[idx][i], is_upward=is_upward)
-    
-    print("--Faces reordering done--")
+    if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:
+        z_r = z_axis
+        min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
+        obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True))[:-1]
+        obb_coords = np.nan_to_num(obb_coords, nan=points[0, 2])
+        obb_coords[:, 2] = (np.min(points[:, 2]) + np.max(points[:, 2])) / 2
 
-    for idx, face in enumerate(faces):
-        # Skip invalid faces if validation is enabled
-        if valid_face and not GeometryValidator._is_valid_face(face):
-            print(f"    Skipping invalid face {idd[idx]}")
-            continue
-        
-        if np.abs(normal[idx][2]) > 1e-3:  # Not wall
-            poly_ex = face
-            
-            # Hole Merging
-            poly_in = {}
-            if holes[idx]:
-                for i in range(len(holes[idx])):
-                    hole = holes[idx][i]
-                    should_skip = GeometryOperator.process_hole(hole, faces, check_projection=True)
-                    if should_skip:
-                        continue
-                    poly_in[i] = hole
-
-                verts, mergelines = GeometryOperator.merge_holes(poly_ex, poly_in)
-                
-                if mergelines:
-                    divide_lines.extend(mergelines)
-                    
-            else:
-                verts = poly_ex
-
-            # Convexification
-            indices = list(range(len(verts)))
-            polys, diags = GeometryOperator.split_poly(verts, indices)
-            
-            subfaces = []
-            for poly in polys:
-                if valid_face: 
-                    if GeometryValidator._is_valid_face(verts[poly]):
-                        subfaces.append(verts[poly])
-                    if not GeometryValidator._is_valid_face(verts[poly]):
-                        print(f"    Skipping invalid sub-face in face {idd[idx]}")
-                        continue
-                if clean_quad and len(poly) > 4:
-                    quad_poly = GeometryOperator.compute_max_inscribed_quadrilateral(verts[poly])
-                    if valid_face and not GeometryValidator._is_valid_face(quad_poly):
-                        print(f"    Skipping invalid quadrilateral sub-face in face {idd[idx]}")
-                        continue
-                    subfaces.append(np.array(quad_poly))
-                else:
-                    subfaces.append(verts[poly])
-
-            if len(subfaces) == 1:
-                for i, subface in enumerate(subfaces):
-                    convex_cat.append(cat[idx])
-                    convex_idd.append(idd[idx])
-                    convex_normal.append(normal[idx])
-                    convex_faces.append(subface)
-            else:
-                for i, subface in enumerate(subfaces):
-                    convex_cat.append(cat[idx])
-                    convex_idd.append(f"#{idd[idx]}_{i}")
-                    convex_normal.append(normal[idx])
-                    convex_faces.append(subface)
-                
-                if diags:
-                    sublines = [np.array([verts[pair[0]], verts[pair[1]]]) for pair in diags]
-                    divide_lines.extend(sublines)
-
+        if len(obb_coords) <= 2:
+            centroid = np.mean(points, axis=0)
+            x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
+            rotation = np.array([x_r, y_r, z_r])
+            rotation_matrix = R.from_matrix(rotation).as_matrix()
+            l = max(np.ptp(points[:, 0]), min_scale)
+            w = max(np.ptp(points[:, 1]), min_scale)
+            h = max(np.ptp(points[:, 2]), min_scale)
+            original_obb_centroid = centroid
         else:
-            convex_cat.append(cat[idx])
-            convex_idd.append(idd[idx])
-            convex_normal.append(normal[idx])
-            convex_faces.append(face)
-    
-    print ("--Faces splitting done--")
+            x_vec = obb_coords[1] - obb_coords[0]
+            y_vec = obb_coords[3] - obb_coords[0]
+            
+            x_norm = np.linalg.norm(x_vec)
+            y_norm = np.linalg.norm(y_vec)
+            
+            x_r = x_vec / x_norm if x_norm > 1e-6 else np.array([1, 0, 0])
+            y_r = y_vec / y_norm if y_norm > 1e-6 else np.array([0, 1, 0])
 
-    # Create quadrilateral air walls
-    quad_faces, quad_normals = GeometryOperator.create_airwalls(divide_lines)
+            rotation = np.array([x_r, y_r, z_r])
+            rotation_matrix = R.from_matrix(rotation).as_matrix()
 
-    for i, face in enumerate(quad_faces):
-        convex_cat.append("2")
-        convex_idd.append(f"a_{i}")
-        convex_normal.append(quad_normals[i])
-        convex_faces.append(face)
+            l = np.linalg.norm(obb_coords[1] - obb_coords[0])
+            w = np.linalg.norm(obb_coords[3] - obb_coords[0])
+            h = max(np.max(points[:, 2]) - np.min(points[:, 2]), min_scale)
 
-    return convex_cat, convex_idd, convex_normal, convex_faces, divide_lines
+            original_obb_centroid = np.mean(obb_coords, axis=0)
+    else:
+        x_r = np.cross(z_r, z_axis)
+        y_r = np.cross(z_r, x_r)
 
-def plot_faces(faces, lines, file_path, _fig_show =False):
-    fig = plt.figure(figsize=(16, 16))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.view_init(elev=45, azim=15)
-
-    for face in faces:
-        x, y, z = face[:, 0], face[:, 1], face[:, 2]
-
-        x = np.append(x, x[0])
-        y = np.append(y, y[0])
-        z = np.append(z, z[0])    
-
-        ax.plot(x, y, z, 'purple')  
-        ax.scatter(x, y, z, c='black', marker='o', s=20)
+        rotation = np.array([x_r, y_r, z_r])
+        rotation_matrix = R.from_matrix(rotation).as_matrix()
         
-    if lines:
-        for line in lines:
-            x, y, z = line[:, 0], line[:, 1], line[:, 2] 
+        rotated_points = points.dot(rotation_matrix.T)
 
-            ax.plot(x, y, z, 'blue')  
+        l = max(np.ptp(rotated_points[:, 0]), min_scale)
+        w = max(np.ptp(rotated_points[:, 1]), min_scale)
+        h = max(np.ptp(rotated_points[:, 2]), min_scale)
+        
+        centroid = np.mean([
+            [np.min(rotated_points[:, 0]), np.min(rotated_points[:, 1]), np.min(rotated_points[:, 2])],
+            [np.max(rotated_points[:, 0]), np.max(rotated_points[:, 1]), np.max(rotated_points[:, 2])]
+        ], axis=0)
+        
+        original_obb_centroid = np.dot(centroid, rotation_matrix)
 
-    all_points = np.vstack(faces)  
-    if lines:
-        all_points = np.vstack([all_points] + lines) 
+    obb_params = {
+        'center': original_obb_centroid,
+        'scale': np.array([l, w, h]),
+        'rotation': rotation_matrix,
+    }
 
-    x_min, x_max = np.min(all_points[:, 0]), np.max(all_points[:, 0])
-    y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
-    z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
+    return obb_params
 
-    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
-    mid_x = (x_max + x_min) / 2.0
-    mid_y = (y_max + y_min) / 2.0
-    mid_z = (z_max + z_min) / 2.0
 
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
-
-    ax.set_box_aspect([1, 1, 1])
+def obb_to_face_vertices(obb_params):
+    """
+    Convert OBB parameters to face vertices (6 faces).
     
-    plt.axis('off')
-    ax.set_axis_off()
-    if _fig_show:
-        plt.show()
-    plt.savefig(file_path, dpi=300)
-    plt.close()
+    Parameters
+    ----------
+    obb_params : dict
+        OBB parameters with 'center', 'scale', 'rotation'
+        
+    Returns
+    -------
+    list
+        List of 6 face vertices for the OBB box
+    """
+    center = obb_params['center']
+    l, w, h = obb_params['scale']
+    rotation_matrix = obb_params['rotation']
+
+    # 8 corner points in local OBB coordinates
+    offsets = np.array([
+        [-l/2, -w/2, -h/2],
+        [l/2, -w/2, -h/2],
+        [l/2, w/2, -h/2],
+        [-l/2, w/2, -h/2],
+        [-l/2, -w/2, h/2],
+        [l/2, -w/2, h/2],
+        [l/2, w/2, h/2],
+        [-l/2, w/2, h/2]
+    ])
+
+    # Rotate and translate
+    corners = offsets.dot(rotation_matrix.T) + center
+
+    # 6 faces of the box
+    faces = [
+        [corners[0], corners[1], corners[2], corners[3]],  # bottom
+        [corners[4], corners[7], corners[6], corners[5]],  # top
+        [corners[0], corners[4], corners[5], corners[1]],  # front
+        [corners[2], corners[6], corners[7], corners[3]],  # back
+        [corners[0], corners[3], corners[7], corners[4]],  # left
+        [corners[1], corners[5], corners[6], corners[2]],  # right
+    ]
+
+    return [np.array(face) for face in faces]

@@ -1,10 +1,11 @@
 import os
 from .convexify import *
+from .simplify import simplify_faces
 from .graph import MoosasGraph
 from graphIO import *
 
 
-def get_output_paths(modelname, output_dir):
+def get_output_paths(modelname, output_dir, lod="precise"):
     """
     Generate output file paths for a given model.
 
@@ -16,6 +17,7 @@ def get_output_paths(modelname, output_dir):
         dict: A dictionary containing paths for various output files.
     """
     paths = {
+        "simplified_geo_path": os.path.join(output_dir, "sim_geo", f"{modelname}_simplified_{lod}.geo"),
         "convex_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
         "output_graph_path": os.path.join(output_dir, "graph", f"{modelname}.json"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
@@ -33,6 +35,36 @@ def get_output_paths(modelname, output_dir):
             os.makedirs(directory, exist_ok=True)
 
     return paths
+
+
+def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="precise"):
+    """
+    Simplify the geometry in the input geo file and save the result.
+
+    Args:
+        input_geo_path (str): Path to the input geometry file.
+        output_geo_path (str): Path to save the simplified geometry file.
+        figure_path (str, optional): Path to save a figure of the simplified geometry. Defaults to None.
+        lod (str, optional): Level of detail for simplification ("precise", "medium", "low"). Defaults to "precise".
+    """
+    # Read geometry data
+    cat, idd, normal, faces, holes = read_geo(input_geo_path)
+
+    # Perform simplification
+    if lod == "precise":
+        # Copy the inoput geo file to the output path without modification
+        with open(input_geo_path, "r") as f:
+            content = f.read()
+        with open(output_geo_path, "w") as f:
+            f.write(content)
+        return
+    elif lod in ["medium", "low"]:
+        simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = simplify_faces(
+            cat, idd, normal, faces, holes, lod=lod
+        )
+
+    # Write simplified geometry data
+    write_geo(output_geo_path, simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes)
 
 
 def convex_process(input_geo_path, output_geo_path, figure_path=None):

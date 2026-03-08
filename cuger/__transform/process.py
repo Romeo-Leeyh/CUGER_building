@@ -4,6 +4,11 @@ from .simplify import simplify_faces
 from .graph import MoosasGraph
 from graphIO import *
 
+# Import visualization functions
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from __analyse.visualise import plot_convex_faces, plot_graph_3d
+
 
 def get_output_paths(modelname, output_dir, lod="precise"):
     """
@@ -90,7 +95,7 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
 
 
     if figure_path:
-        plot_faces(convex_faces, divided_lines, file_path=figure_path)
+        plot_convex_faces(convex_faces, divided_lines, file_path=figure_path)
 
 
 def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None):
@@ -117,6 +122,6 @@ def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None
     graph_to_json(graph, output_json_path)
 
     if figure_path:
-        graph.draw_graph_3d(file_path=figure_path) 
+        plot_graph_3d(graph.graph, file_path=figure_path) 
 
 

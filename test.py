@@ -73,8 +73,8 @@ def process_file(input_geo_path, modelname, lod="precise"):
 
         Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
         Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-        Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
-        Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
+        #Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+        #Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
         print(f"    ✓ Moosas transformation completed")
     
     except Exception as e:

@@ -1,8 +1,14 @@
 import os
 import sys
 
+# Ensure workspace root is importable when running this file directly
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+WORKSPACE_ROOT = os.path.dirname(CURRENT_DIR)
+if WORKSPACE_ROOT not in sys.path:
+    sys.path.insert(0, WORKSPACE_ROOT)
+
 from cuger.__transform import process as ps
-#import moosas.MoosasPy as Moosas
+import moosas.MoosasPy as Moosas
 
 # Define input/output directories
 input_dir = "tests/examples"
@@ -38,13 +44,11 @@ def process_file(input_geo_path, modelname, lod="precise"):
     
     # Perform simplification
     print(f"  Step 1: Simplifying geometry (LOD={lod})...")
-    try:
-        ps.simplify_process(input_geo_path, simplified_geo_path, 
-                           figure_path=None, lod=lod)
-        print(f"    [OK] Simplified geometry saved to: {simplified_geo_path}")
-    except Exception as e:
-        print(f"    [FAILED] Simplification failed: {e}")
-        return False
+
+    ps.simplify_process(input_geo_path, simplified_geo_path, 
+                        figure_path=None, lod=lod)
+    print(f"    [OK] Simplified geometry saved to: {simplified_geo_path}")
+
     
     # Step 2: Convexify the simplified geometry
     print(f"  Step 2: Convexifying simplified geometry...")
@@ -58,31 +62,32 @@ def process_file(input_geo_path, modelname, lod="precise"):
 
     # Step 3: Transform with Moosas (optional, currently commented out)
     # Uncomment the following code to enable Moosas transformation
-    # try:
-    #     model = Moosas.transform(paths["convex_geo_path"], 
-    #                     solve_overlap=True, 
-    #                     divided_zones=False, 
-    #                     break_wall_horizontal=True, 
-    #                     solve_redundant=True,
-    #                     attach_shading=False,
-    #                     standardize=True)
-    #     
-    #     Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
-    #     Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-    #     Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
-    #     Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
-    #     print(f"    ✓ Moosas transformation completed")
-    # except Exception as e:
-    #     print(f"    ✗ Moosas transformation failed: {e}")
+    try:
+        model = Moosas.transform(paths["convex_geo_path"], 
+                       solve_overlap=True, 
+                      divided_zones=False, 
+                      break_wall_horizontal=True, 
+                      solve_redundant=True,
+                       attach_shading=False,
+                       standardize=True) 
+
+        Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
+        Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
+        Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+        Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
+        print(f"    ✓ Moosas transformation completed")
+    
+    except Exception as e:
+        print(f"    ✗ Moosas transformation failed: {e}")
     
     # Step 4: Generate graph (optional, currently commented out)
     # Uncomment the following code to enable graph generation
-    # try:
-    #     ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], 
-    #                     paths["output_graph_path"], paths["figure_graph_path"])
-    #     print(f"    ✓ Graph generated")
-    # except Exception as e:
-    #     print(f"    ✗ Graph generation failed: {e}")
+    try:
+        ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], 
+                        paths["output_graph_path"], paths["figure_graph_path"])
+        print(f"    ✓ Graph generated")
+    except Exception as e:
+        print(f"    ✗ Graph generation failed: {e}")
 
     return True
 
@@ -90,9 +95,6 @@ def process_file(input_geo_path, modelname, lod="precise"):
 def main():
     """Main function to process all GEO files with different LOD levels."""
     
-    print("=" * 80)
-    print("BuildingConvex - Three-Level LOD Processing Pipeline")
-    print("=" * 80)
     print(f"\nInput directory: {input_dir}")
     print(f"Output directory: {output_dir}\n")
     
@@ -118,20 +120,18 @@ def main():
     print(f"Found {len(geo_files)} GEO file(s) to process\n")
     
     # Process files with different LOD levels
-    lod = "precise"  # Change to "medium" or "low" as needed
+    lod = "precise"  
 
         
     for input_geo_path, basename in geo_files:
-        try:
-            if process_file(input_geo_path, basename, lod=lod):
-                print(f"[OK] Successfully processed: {basename}\n")
-            else:
-                print(f"[FAILED] Failed to process: {basename}\n")
-        except Exception as e:
-            print(f"[ERROR] Error processing {basename}: {str(e)}\n")
+
+        if process_file(input_geo_path, basename, lod=lod):
+            print(f"[OK] Successfully processed: {basename}\n")
+        else:
+            print(f"[FAILED] Failed to process: {basename}\n")
+
     
-    
-    print("\n" + "=" * 80)
+    print("=" * 80)
     print("Processing complete!")
     print("=" * 80)
 

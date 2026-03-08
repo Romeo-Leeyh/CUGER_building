@@ -66,6 +66,38 @@ class GeometryBasic:
             area += x1 * y2 - x2 * y1
         
         return abs(area) / 2.0
+    
+    @staticmethod
+    def polygon_area_3d(vertices):
+        """
+        Calculate the area of a 3D polygon by projecting it onto the best-fit plane.
+        
+        Parameters
+        ----------
+        vertices : list or numpy.ndarray
+            List of 3D vertices (x, y, z) forming a polygon.
+        
+        Returns
+        -------
+        float
+            The area of the polygon.
+        """
+        if len(vertices) < 3:
+            return 0.0
+        
+        v = np.asarray(vertices, dtype=float)
+        
+        # Compute normal vector using Newell's method
+        normal = np.zeros(3)
+        for i in range(len(v)):
+            current = v[i]
+            next_vertex = v[(i + 1) % len(v)]
+            normal[0] += (current[1] - next_vertex[1]) * (current[2] + next_vertex[2])
+            normal[1] += (current[2] - next_vertex[2]) * (current[0] + next_vertex[0])
+            normal[2] += (current[0] - next_vertex[0]) * (current[1] + next_vertex[1])
+        
+        area = np.linalg.norm(normal) / 2.0
+        return area
 
 # ============================================================================
 # GEOMETRY VALIDATOR CLASS
@@ -258,53 +290,42 @@ class GeometryOperator:
 
     @staticmethod
     def reorder_vertices(face, is_upward):
-        """Re-order vertices of a face to make the normal face upward or downward.
+        """Re-order vertices of a face to enforce winding in XY projection.
         
         This function ensures:
-        1. Vertex order is normalized (counter-clockwise when viewed from above)
+        1. Vertex order is normalized in XY projection
         2. The face starts from a consistent reference point (minimum sum of coordinates)
         3. Vertex direction matches the expected is_upward orientation
         
         Args:
             face: numpy array, shape=(n, 3), sequence of vertices of a face
-            is_upward: bool, True for upward (CCW from above), False for downward (CW from above)
+            is_upward: bool, True for CCW from above, False for CW from above
         
         Returns:
             reordered_face: numpy array, shape=(n, 3), properly ordered vertices
         """
         face = np.asarray(face, dtype=float)
-        
-        # Find the reference point (minimum sum of x, y, z coordinates)
-        sum_xyz = np.sum(face, axis=1)
-        min_index = np.argmin(sum_xyz)
-        
-        # Rotate face to start from the reference point
+        if len(face) <= 1:
+            return face
+
+        # Rotate to a stable start vertex first (minimum x+y+z)
+        min_index = np.argmin(np.sum(face, axis=1))
         face = np.roll(face, -min_index, axis=0)
-        
-        # Compute the signed area in 2D (XY plane) to determine winding order
-        # Using the shoelace formula: positive = CCW, negative = CW
-        n = len(face)
-        signed_area = 0.0
-        for i in range(n):
-            x1, y1 = face[i][0], face[i][1]
-            x2, y2 = face[(i + 1) % n][0], face[(i + 1) % n][1]
-            signed_area += (x2 - x1) * (y2 + y1)
-        
-        # signed_area > 0 means CW, < 0 means CCW in standard XY coordinates
-        is_clockwise = signed_area > 0
-        
-        # Adjust winding order if needed
-        # For is_upward=True, we want CCW (signed_area < 0)
-        # For is_upward=False, we want CW (signed_area > 0)
-        if is_upward and is_clockwise:
-            # Need to reverse to CCW
+
+        # Signed area in XY by shoelace: >0 => CCW, <0 => CW
+        x = face[:, 0]
+        y = face[:, 1]
+        signed_area = 0.5 * np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y)
+        is_ccw = signed_area > 0
+
+        # is_upward=True => enforce CCW; is_upward=False => enforce CW
+        if (is_upward and not is_ccw) or ((not is_upward) and is_ccw):
             face = face[::-1]
-            face = np.roll(face, -min_index, axis=0)  # Re-adjust starting point after reversal
-        elif not is_upward and not is_clockwise:
-            # Need to reverse to CW
-            face = face[::-1]
-            face = np.roll(face, -min_index, axis=0)  # Re-adjust starting point after reversal
-            
+
+        # Re-align start vertex after potential reversal
+        min_index = np.argmin(np.sum(face, axis=1))
+        face = np.roll(face, -min_index, axis=0)
+
         return face
 
     @staticmethod
@@ -554,7 +575,6 @@ class GeometryOperator:
         for ia in range(n):
             ia_prev, ia_next = (ia - 1) % n, (ia + 1) % n
             angle = GeometryBasic.angle(verts[indices[ia_prev]], verts[indices[ia]], verts[indices[ia_next]])
-            
             if angle < 0:
                 i_concave = ia
                 break
@@ -795,3 +815,42 @@ def obb_to_face_vertices(obb_params):
     ]
 
     return [np.array(face) for face in faces]
+
+def calculate_wwr (cats, faces, normals):
+    """
+    Calculate Window-to-Wall Ratio (WWR) for a set of faces and their normals.
+    
+    Parameters
+    ----------
+    cats : list of str
+        List of category IDs for each face
+    faces : list of np.ndarray
+        List of face vertices, each of shape (n, 3)
+    normals : list of np.ndarray
+        List of normal vectors corresponding to each face, each of shape (3,)
+        
+    Returns
+    -------
+    float
+        The calculated WWR value
+    """
+    total_wall_area = 0.0
+    total_window_area = 0.0
+    
+    for cat, face, normal in zip(cats, faces, normals):
+        area = GeometryBasic.polygon_area_3d(face)
+        if area < 1e-6:
+            continue
+        
+        if abs(normal[2]) < 1e-3:
+            if int(cat) == 1:  # Assuming category 1 represents windows
+                total_window_area += area
+            else:
+                total_wall_area += area
+            
+    if total_wall_area + total_window_area == 0:
+        return 0.0
+    
+    wwr = total_window_area / (total_wall_area + total_window_area)
+    
+    return wwr

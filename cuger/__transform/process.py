@@ -17,7 +17,7 @@ def get_output_paths(modelname, output_dir, lod="precise"):
         dict: A dictionary containing paths for various output files.
     """
     paths = {
-        "simplified_geo_path": os.path.join(output_dir, "sim_geo", f"{modelname}_simplified_{lod}.geo"),
+        "simplified_geo_path": os.path.join(output_dir, "geo_s", f"{modelname}_s_{lod}.geo"),
         "convex_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
         "output_graph_path": os.path.join(output_dir, "graph", f"{modelname}.json"),
         "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),

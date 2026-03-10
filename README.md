@@ -167,6 +167,40 @@ pip install -U cuger
 Optional: configure credentials with `.pypirc` or environment variables such as
 `TWINE_USERNAME` and `TWINE_PASSWORD` to avoid typing them each time.
 
+### GitHub Actions Auto Publish (PyPI)
+
+This repository includes CI workflow: `.github/workflows/publish-pypi.yml`.
+
+- Push tag `v*` (for example `v0.1.1`) -> build and publish to **PyPI**
+- Manual run (`workflow_dispatch`) -> choose **testpypi** or **pypi**
+
+#### One-time configuration (Trusted Publisher)
+
+- In PyPI project settings (`cuger`), add a **Trusted Publisher**.
+- Owner: your GitHub org/user.
+- Repository: `cuger` repository.
+- Workflow name: `publish-pypi.yml`.
+- Environment: `pypi`.
+
+- In TestPyPI project settings (`cuger`), add another Trusted Publisher.
+- Use the same repository and workflow.
+- Environment: `testpypi`.
+
+- In GitHub repository settings, create environments: `pypi` and `testpypi`.
+
+No PyPI API token secret is required when using Trusted Publisher (OIDC).
+
+#### Release commands
+
+```bash
+# 1) bump version in pyproject.toml
+# 2) commit and push
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+If you want to dry-run to TestPyPI first, use **Actions -> Publish Python Package -> Run workflow -> repository=testpypi**.
+
 ### Run with CLI (`main.py`)
 
 `main.py` supports interactive mode and command-line mode.

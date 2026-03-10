@@ -2,12 +2,8 @@ import os
 from .convexify import *
 from .simplify import simplify_faces
 from .graph import MoosasGraph
-from graphIO import *
-
-# Import visualization functions
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from __analyse.visualise import plot_convex_faces, plot_graph_3d
+from ..graphIO import *
+from ..__analyse.visualise import plot_convex_faces, plot_graph_3d
 
 
 def get_output_paths(modelname, output_dir, lod="precise"):
@@ -55,9 +51,11 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
     # Read geometry data
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
 
+    os.makedirs(os.path.dirname(output_geo_path), exist_ok=True)
+
     # Perform simplification
     if lod == "precise":
-        # Copy the inoput geo file to the output path without modification
+        # Copy the input geo file to the output path without modification
         with open(input_geo_path, "r") as f:
             content = f.read()
         with open(output_geo_path, "w") as f:
@@ -67,6 +65,8 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
         simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = simplify_faces(
             cat, idd, normal, faces, holes, lod=lod
         )
+    else:
+        raise ValueError("lod must be one of: precise, medium, low")
 
     # Write simplified geometry data
     write_geo(output_geo_path, simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes)
@@ -80,8 +80,6 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
         input_geo_path (str): Path to the input geometry file.
         output_geo_path (str): Path to save the convexified geometry file.
     """
-
-
     # Read geometry data
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
 
@@ -91,6 +89,7 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
     )
 
     # Write convexified geometry data
+    os.makedirs(os.path.dirname(output_geo_path), exist_ok=True)
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
 
 
@@ -109,6 +108,8 @@ def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None
     """
     faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(new_geo_path)
     root = read_xml(new_xml_path)
+
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
     
     # Initialize the graph
     graph = MoosasGraph()

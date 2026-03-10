@@ -26,6 +26,16 @@ This feature is integrated in the processing pipeline as:
 
 ## Installation
 
+### Install from PyPI
+
+```bash
+pip install cuger
+```
+
+The core package only contains the code under `cuger/cuger`.
+If you also need Moosas-based export (`.geo/.xml/.idf/.owl`) and graph generation,
+please install Moosas separately.
+
 ### Install from git
 
 ```bash
@@ -70,6 +80,92 @@ To run the test:
 ```bash
 python test.py
 ```
+
+### Use as a Python package
+
+The public API follows the same main flow used in `test.py`:
+
+```python
+from cuger import PipelineOptions, process_geo_directory, process_geo_file
+
+options = PipelineOptions(lod="medium")
+
+process_geo_file("tests/examples/example0.geo", "tests/example_results", options=options)
+
+process_geo_directory("tests/examples", "tests/example_results", options=options)
+```
+
+If you only want simplification + convex decomposition and do not want to depend on Moosas:
+
+```python
+from cuger import PipelineOptions, process_geo_file
+
+options = PipelineOptions(
+  lod="medium",
+  run_moosas=False,
+  generate_graph=False,
+)
+
+process_geo_file("tests/examples/example0.geo", "tests/example_results", options=options)
+```
+
+### CLI
+
+After installation, you can also use the packaged command:
+
+```bash
+cuger -s tests/examples/example0.geo -o tests/example_results -l medium
+cuger -i tests/examples -o tests/example_results -l medium
+```
+
+### Publish to PyPI
+
+Before publishing, update the version in `pyproject.toml`.
+
+Build the package:
+
+```bash
+python -m pip install -U build twine
+python -m build
+```
+
+This generates:
+
+- `dist/cuger-<version>.tar.gz`
+- `dist/cuger-<version>-py3-none-any.whl`
+
+Validate the distribution metadata locally:
+
+```bash
+python -m twine check dist/*
+```
+
+Upload to **TestPyPI** first:
+
+```bash
+python -m twine upload --repository testpypi dist/*
+```
+
+Then test installation:
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple cuger
+```
+
+If everything looks good, upload to the official **PyPI** index:
+
+```bash
+python -m twine upload dist/*
+```
+
+After release, verify installation from PyPI:
+
+```bash
+pip install -U cuger
+```
+
+Optional: configure credentials with `.pypirc` or environment variables such as
+`TWINE_USERNAME` and `TWINE_PASSWORD` to avoid typing them each time.
 
 ### Run with CLI (`main.py`)
 

@@ -12,7 +12,7 @@ import moosas.MoosasPy as Moosas
 
 # Define input/output directories
 input_dir = "tests/examples"
-output_dir = "tests/example_results"
+output_dir = "tests/examples_results"
 
 # Create output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)
@@ -74,7 +74,7 @@ def process_file(input_geo_path, modelname, lod="precise"):
         Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
         Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
         #Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
-        #Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
+        Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
         print(f"    ✓ Moosas transformation completed")
     
     except Exception as e:

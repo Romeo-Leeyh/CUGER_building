@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from graphIO import json_to_graph
+from ..graphIO import json_to_graph
 
 def draw_graph_3d(graph, file_path, _fig_show =False):
     """绘制图结构的三维表示"""
@@ -189,5 +189,5 @@ def batch_process_graphs(root_dir, output_csv):
     df = pd.DataFrame(results)
     df.to_csv(output_csv, index=False)
 
-# 示例调用
-batch_process_graphs("E:/DATA/Moosasbuildingdatasets/graph", "graph_properties.csv")
+if __name__ == "__main__":
+    batch_process_graphs("E:/DATA/Moosasbuildingdatasets/graph", "graph_properties.csv")

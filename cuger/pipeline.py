@@ -98,6 +98,7 @@ def process_geo_file(
         paths["simplified_geo_path"],
         paths["convex_geo_path"],
         paths["figure_convex_path"] if options.convex_figure else None,
+        overlay_geo_path=str(input_path),
     )
 
     moosas_used = False

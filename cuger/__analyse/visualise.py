@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_convex_faces(faces, lines, file_path, _fig_show=False):
+def plot_convex_faces(faces, lines, file_path, _fig_show=False, overlay_faces=None):
     """
     Plot convexified faces and divide lines in 3D.
     
@@ -21,6 +21,8 @@ def plot_convex_faces(faces, lines, file_path, _fig_show=False):
         Path to save the figure
     _fig_show : bool
         Whether to show the figure
+    overlay_faces : list of np.ndarray, optional
+        Optional reference faces to overlay (e.g., original geometry)
     """
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111, projection='3d')
@@ -28,6 +30,16 @@ def plot_convex_faces(faces, lines, file_path, _fig_show=False):
     
     # Remove margins
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    if overlay_faces:
+        for face in overlay_faces:
+            x, y, z = face[:, 0], face[:, 1], face[:, 2]
+
+            x = np.append(x, x[0])
+            y = np.append(y, y[0])
+            z = np.append(z, z[0])
+
+            ax.plot(x, y, z, color='#777777', alpha=0.35)
 
     for face in faces:
         x, y, z = face[:, 0], face[:, 1], face[:, 2]
@@ -45,7 +57,9 @@ def plot_convex_faces(faces, lines, file_path, _fig_show=False):
 
             ax.plot(x, y, z, 'blue')  
 
-    all_points = np.vstack(faces)  
+    all_points = np.vstack(faces)
+    if overlay_faces:
+        all_points = np.vstack([all_points] + overlay_faces)
     if lines:
         all_points = np.vstack([all_points] + lines) 
 

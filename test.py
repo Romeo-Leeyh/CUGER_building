@@ -11,8 +11,8 @@ from cuger.__transform import process as ps
 import moosas.MoosasPy as Moosas
 
 # Define input/output directories
-input_dir = "tests/examples"
-output_dir = "tests/examples_results"
+input_dir = r"E:\\DATA\\CUGER_energy_data_0111\\all_medium\\geo"
+output_dir = r"E:\\DATA\\CUGER_energy_data_0111\\all_medium"
 
 # Create output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)
@@ -53,12 +53,20 @@ def process_file(input_geo_path, modelname, lod="precise"):
     # Step 2: Convexify the simplified geometry
     print(f"  Step 2: Convexifying simplified geometry...")
     try:
-        ps.convex_process(simplified_geo_path, paths["convex_geo_path"], 
-                         paths["figure_convex_path"])
+        ps.convex_process(
+            simplified_geo_path,
+            paths["convex_geo_path"],
+            paths["figure_convex_path"],
+            overlay_geo_path=input_geo_path,
+        )
         print(f"    [OK] Convexified geometry saved to: {paths['convex_geo_path']}")
+
+        return
     except Exception as e:
         print(f"    [FAILED] Convexification failed: {e}")
         return False
+    
+    
 
     # Step 3: Transform with Moosas (optional, currently commented out)
     # Uncomment the following code to enable Moosas transformation
@@ -112,6 +120,7 @@ def main():
                 relative_path = os.path.relpath(input_geo_path, input_dir)
                 basename = os.path.splitext(relative_path)[0].replace('\\', '_')
                 geo_files.append((input_geo_path, basename))
+                break
     
     if not geo_files:
         print(f"No GEO files found in {input_dir}")
@@ -120,7 +129,7 @@ def main():
     print(f"Found {len(geo_files)} GEO file(s) to process\n")
     
     # Process files with different LOD levels
-    lod = "precise"  
+    lod = "low"  
 
         
     for input_geo_path, basename in geo_files:
@@ -129,6 +138,7 @@ def main():
             print(f"[OK] Successfully processed: {basename}\n")
         else:
             print(f"[FAILED] Failed to process: {basename}\n")
+        
 
     
     print("=" * 80)

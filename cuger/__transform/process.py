@@ -72,7 +72,7 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
     write_geo(output_geo_path, simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes)
 
 
-def convex_process(input_geo_path, output_geo_path, figure_path=None):
+def convex_process(input_geo_path, output_geo_path, figure_path=None, overlay_geo_path=None):
     """
     Perform convexification on the input geometry file and save the result.
  
@@ -94,7 +94,10 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None):
 
 
     if figure_path:
-        plot_convex_faces(convex_faces, divided_lines, file_path=figure_path)
+        overlay_faces = None
+        if overlay_geo_path:
+            _, _, _, overlay_faces, _ = read_geo(overlay_geo_path)
+        plot_convex_faces(convex_faces, divided_lines, file_path=figure_path, overlay_faces=overlay_faces)
 
 
 def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None):

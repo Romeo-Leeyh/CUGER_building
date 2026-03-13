@@ -742,6 +742,8 @@ def create_obb(points, normal, min_scale=0.1):
             h = max(np.max(points[:, 2]) - np.min(points[:, 2]), min_scale)
 
             original_obb_centroid = np.mean(obb_coords, axis=0)
+
+            print (f"l:{l}, w:{w}, h:{h}, centroid:{original_obb_centroid}, rotation:\n{rotation_matrix}")
     else:
         x_r = np.cross(z_r, z_axis)
         y_r = np.cross(z_r, x_r)
@@ -773,7 +775,7 @@ def create_obb(points, normal, min_scale=0.1):
 
 def obb_to_face_vertices(obb_params):
     """
-    Convert OBB parameters to face vertices (6 faces).
+    Convert OBB parameters to face vertices and normals (6 faces).
     
     Parameters
     ----------
@@ -782,8 +784,9 @@ def obb_to_face_vertices(obb_params):
         
     Returns
     -------
-    list
-        List of 6 face vertices for the OBB box
+    tuple
+        (faces, normals) where faces is a list of 6 face vertices and
+        normals is a list of unit normals aligned with each face.
     """
     center = obb_params['center']
     l, w, h = obb_params['scale']
@@ -802,7 +805,7 @@ def obb_to_face_vertices(obb_params):
     ])
 
     # Rotate and translate
-    corners = offsets.dot(rotation_matrix.T) + center
+    corners = offsets.dot(rotation_matrix) + center
 
     # 6 faces of the box
     faces = [
@@ -814,7 +817,16 @@ def obb_to_face_vertices(obb_params):
         [corners[1], corners[5], corners[6], corners[2]],  # right
     ]
 
-    return [np.array(face) for face in faces]
+    faces = [np.array(face) for face in faces]
+    normals = []
+    for face in faces:
+        v1 = face[1] - face[0]
+        v2 = face[3] - face[0]
+        normal = np.cross(v1, v2)
+        normal = np.round(normal / (np.linalg.norm(normal) + 1e-6), 3)
+        normals.append(normal)
+
+    return faces, normals
 
 def calculate_wwr (cats, faces, normals):
     """

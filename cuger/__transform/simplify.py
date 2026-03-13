@@ -168,7 +168,7 @@ def _simplify_to_single_obb(cat, idd, normal, faces, wwr):
     # Create OBB for all points
     obb_params = create_obb(all_verts, normal)
 
-    obb_faces = obb_to_face_vertices(obb_params)
+    obb_faces, obb_normals = obb_to_face_vertices(obb_params)
     
     # Generate category, ID, normal, holes, and window faces for OBB faces
     simplified_cat = []
@@ -178,11 +178,7 @@ def _simplify_to_single_obb(cat, idd, normal, faces, wwr):
     simplified_holes = []
     
     for i, face_verts in enumerate(obb_faces):
-        # Calculate normal from vertices
-        v1 = face_verts[1] - face_verts[0]
-        v2 = face_verts[3] - face_verts[0]
-        face_normal = np.cross(v1, v2)
-        face_normal = face_normal / (np.linalg.norm(face_normal) + 1e-10)
+        face_normal = obb_normals[i]
         
         # Create window opening on wall faces
         hole, window_face = _create_window_on_wall(face_verts, face_normal, wwr)
@@ -313,16 +309,12 @@ def _simplify_to_multi_layer_obb(cat, idd, normal, faces, wwr):
         obb_params['scale'][2] = layer_height
         obb_params['center'][2] = bottom_z + layer_height / 2.0
 
-        obb_faces = obb_to_face_vertices(obb_params)
+        obb_faces, obb_normals = obb_to_face_vertices(obb_params)
 
         for face_idx, face_verts in enumerate(obb_faces):
             if _polygon_area_3d(face_verts) <= min_face_area:
                 continue
-
-            v1 = face_verts[1] - face_verts[0]
-            v2 = face_verts[3] - face_verts[0]
-            current_face_normal = np.cross(v1, v2)
-            current_face_normal = current_face_normal / (np.linalg.norm(current_face_normal) + 1e-10)
+            current_face_normal = obb_normals[face_idx]
             
             # Create window opening on wall faces
             hole, window_face = _create_window_on_wall(face_verts, current_face_normal, wwr)

@@ -743,7 +743,6 @@ def create_obb(points, normal, min_scale=0.1):
 
             original_obb_centroid = np.mean(obb_coords, axis=0)
 
-            print (f"l:{l}, w:{w}, h:{h}, centroid:{original_obb_centroid}, rotation:\n{rotation_matrix}")
     else:
         x_r = np.cross(z_r, z_axis)
         y_r = np.cross(z_r, x_r)

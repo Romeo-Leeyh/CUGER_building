@@ -284,6 +284,17 @@ def _simplify_to_multi_layer_obb(cat, idd, normal, faces, wwr):
     if len(level_z) < 2:
         return _simplify_to_single_obb(cat, idd, normal, faces, wwr)
 
+    # Collect wall-like faces once (normal mostly horizontal) for per-layer OBB fitting.
+    wall_faces = []
+    for i, face_normal in enumerate(normal):
+        if abs(face_normal[2]) <= 0.7:
+            candidate_face = np.asarray(faces[i], dtype=float)
+            if len(candidate_face) < 3:
+                continue
+            if _polygon_area_3d(candidate_face) <= min_face_area:
+                continue
+            wall_faces.append(candidate_face)
+
     for layer_idx in range(len(level_z) - 1):
         bottom_z = level_z[layer_idx]
         top_z = level_z[layer_idx + 1]
@@ -292,8 +303,25 @@ def _simplify_to_multi_layer_obb(cat, idd, normal, faces, wwr):
         if layer_height <= min_layer_height:
             continue
 
-        layer_faces = z_groups[layer_idx]['faces']
-        all_verts = np.vstack(layer_faces)
+        z_band_tol = max(1e-4, layer_height * 0.02)
+
+        # Prefer wall vertices whose face centroid z falls in current story band.
+        layer_wall_verts = []
+        for wall_face in wall_faces:
+            face_z_center = float(np.mean(wall_face[:, 2]))
+
+            # Keep wall faces by centroid-z membership in the current layer.
+            if face_z_center < bottom_z - z_band_tol or face_z_center > top_z + z_band_tol:
+                continue
+
+            layer_wall_verts.append(wall_face)
+
+        if len(layer_wall_verts) > 0:
+            all_verts = np.vstack(layer_wall_verts)
+        else:
+            # Fallback to floor vertices when wall faces are unavailable.
+            layer_faces = z_groups[layer_idx]['faces']
+            all_verts = np.vstack(layer_faces)
 
         span_x = float(np.ptp(all_verts[:, 0]))
         span_y = float(np.ptp(all_verts[:, 1]))
@@ -304,7 +332,7 @@ def _simplify_to_multi_layer_obb(cat, idd, normal, faces, wwr):
         if len(unique_xy) < 3:
             continue
 
-        # Build footprint OBB from current level floor faces, then assign layer height.
+        # Fit OBB from layer vertices (wall-priority), then assign story height.
         obb_params = create_obb(all_verts, (0, 0, 1))
         obb_params['scale'][2] = layer_height
         obb_params['center'][2] = bottom_z + layer_height / 2.0

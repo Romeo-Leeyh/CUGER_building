@@ -18,6 +18,20 @@ output_dir = r"E:\\DATA\\CUGER_energy_data_0111\\all_medium"
 os.makedirs(output_dir, exist_ok=True)
 
 
+def is_file_processed(modelname, lod="precise"):
+    """Return True when the expected pipeline outputs for a model already exist."""
+    paths = ps.get_output_paths(modelname, output_dir, lod=lod)
+    required_outputs = [
+        paths["simplified_geo_path"],
+        paths["convex_geo_path"],
+        paths["new_geo_path"],
+        paths["new_xml_path"],
+        paths["new_idf_path"],
+        paths["output_graph_path"],
+    ]
+    return all(os.path.exists(path) for path in required_outputs)
+
+
 def process_file(input_geo_path, modelname, lod="precise"):
     """
     Process a single GEO file through the simplification and convexification pipeline.
@@ -61,7 +75,6 @@ def process_file(input_geo_path, modelname, lod="precise"):
         )
         print(f"    [OK] Convexified geometry saved to: {paths['convex_geo_path']}")
 
-        return
     except Exception as e:
         print(f"    [FAILED] Convexification failed: {e}")
         return False
@@ -120,8 +133,7 @@ def main():
                 relative_path = os.path.relpath(input_geo_path, input_dir)
                 basename = os.path.splitext(relative_path)[0].replace('\\', '_')
                 geo_files.append((input_geo_path, basename))
-                break
-    
+
     if not geo_files:
         print(f"No GEO files found in {input_dir}")
         return
@@ -129,19 +141,27 @@ def main():
     print(f"Found {len(geo_files)} GEO file(s) to process\n")
     
     # Process files with different LOD levels
-    lod = "low"  
+    lod = "medium"  # Change to 'medium' or 'low' as needed
+    processed_count = 0
+    skipped_count = 0
 
         
     for input_geo_path, basename in geo_files:
+        if is_file_processed(basename, lod=lod):
+            print(f"[SKIPPED] Already processed: {basename}\n")
+            skipped_count += 1
+            continue
 
         if process_file(input_geo_path, basename, lod=lod):
             print(f"[OK] Successfully processed: {basename}\n")
+            processed_count += 1
         else:
             print(f"[FAILED] Failed to process: {basename}\n")
         
 
     
     print("=" * 80)
+    print(f"Processed: {processed_count}, Skipped: {skipped_count}, Total: {len(geo_files)}")
     print("Processing complete!")
     print("=" * 80)
 

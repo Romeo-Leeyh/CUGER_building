@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from .convexify import *
 from .simplify import simplify_faces
 from .graph import MoosasGraph
@@ -17,25 +17,24 @@ def get_output_paths(modelname, output_dir, lod="precise"):
     Returns:
         dict: A dictionary containing paths for various output files.
     """
+    output_root = Path(output_dir)
     paths = {
-        "simplified_geo_path": os.path.join(output_dir, "geo_s", f"{modelname}_s_{lod}.geo"),
-        "convex_geo_path": os.path.join(output_dir, "geo_c", f"{modelname}_c.geo"),
-        "output_graph_path": os.path.join(output_dir, "graph", f"{modelname}.json"),
-        "new_xml_path": os.path.join(output_dir, "new_xml", f"{modelname}.xml"),
-        "new_geo_path": os.path.join(output_dir, "new_geo", f"{modelname}.geo"),
-        "new_idf_path": os.path.join(output_dir, "new_idf", f"{modelname}.idf"),
-        "new_rdf_path": os.path.join(output_dir, "new_rdf", f"{modelname}.owl"),
-        "figure_convex_path": os.path.join(output_dir, "figure_convex", f"{modelname}_convex.png"),
-        "figure_graph_path": os.path.join(output_dir, "figure_graph", f"{modelname}_graph.png"),
+        "simplified_geo_path": output_root / "geo_s" / f"{modelname}_s_{lod}.geo",
+        "convex_geo_path": output_root / "geo_c" / f"{modelname}_c.geo",
+        "output_graph_path": output_root / "graph" / f"{modelname}.json",
+        "new_xml_path": output_root / "new_xml" / f"{modelname}.xml",
+        "new_geo_path": output_root / "new_geo" / f"{modelname}.geo",
+        "new_idf_path": output_root / "new_idf" / f"{modelname}.idf",
+        "new_rdf_path": output_root / "new_rdf" / f"{modelname}.owl",
+        "figure_convex_path": output_root / "figure_convex" / f"{modelname}_convex.png",
+        "figure_graph_path": output_root / "figure_graph" / f"{modelname}_graph.png",
     }
 
     # Ensure all directories exist
     for path in paths.values():
-        directory = os.path.dirname(path)
-        if directory:  # Check if the directory part of the path is not empty
-            os.makedirs(directory, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
-    return paths
+    return {key: str(value) for key, value in paths.items()}
 
 
 def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="precise"):
@@ -51,15 +50,14 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
     # Read geometry data
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
 
-    os.makedirs(os.path.dirname(output_geo_path), exist_ok=True)
+    output_geo = Path(output_geo_path)
+    output_geo.parent.mkdir(parents=True, exist_ok=True)
 
     # Perform simplification
     if lod == "precise":
         # Copy the input geo file to the output path without modification
-        with open(input_geo_path, "r") as f:
-            content = f.read()
-        with open(output_geo_path, "w") as f:
-            f.write(content)
+        content = Path(input_geo_path).read_text(encoding="utf-8")
+        output_geo.write_text(content, encoding="utf-8")
         return
     elif lod in ["medium", "low"]:
         simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = simplify_faces(
@@ -89,7 +87,7 @@ def convex_process(input_geo_path, output_geo_path, figure_path=None, overlay_ge
     )
 
     # Write convexified geometry data
-    os.makedirs(os.path.dirname(output_geo_path), exist_ok=True)
+    Path(output_geo_path).parent.mkdir(parents=True, exist_ok=True)
     write_geo(output_geo_path, convex_cat, convex_idd, convex_normal, convex_faces)
 
 
@@ -112,7 +110,7 @@ def graph_process(new_geo_path, new_xml_path, output_json_path, figure_path=None
     faces_category, faces_id, faces_normal, faces_vertices, faces_holes = read_geo(new_geo_path)
     root = read_xml(new_xml_path)
 
-    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+    Path(output_json_path).parent.mkdir(parents=True, exist_ok=True)
     
     # Initialize the graph
     graph = MoosasGraph()

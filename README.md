@@ -57,13 +57,13 @@ If you just want to try the algorithm to split building models, this step can be
 
 You can run the example script in `test.py`.  
 This will process sample building models under `tests/examples/`  
-and generate outputs in `tests/example_results/`.
+and generate outputs in `tests/examples_results/`.
 
 ```cmd
 tests
 ├── examples
 │   └── example0.geo        # Sample test case
-└── example_results
+└── examples_results
     ├── geo_s               # Simplified geometry (_s_<lod>.geo)
     ├── figure_convex       # Convex decomposition figures
     ├── figure_graph        # Graph visualization figures
@@ -92,7 +92,7 @@ options = PipelineOptions(lod="medium")
 
 process_geo_file("tests/examples/example0.geo", "tests/example_results", options=options)
 
-process_geo_directory("tests/examples", "tests/example_results", options=options)
+process_geo_directory("tests/examples", "tests/examples_results", options=options)
 ```
 
 If you only want simplification + convex decomposition and do not want to depend on Moosas:
@@ -106,7 +106,7 @@ options = PipelineOptions(
   generate_graph=False,
 )
 
-process_geo_file("tests/examples/example0.geo", "tests/example_results", options=options)
+process_geo_file("tests/examples/example0.geo", "tests/examples_results", options=options)
 ```
 
 ### CLI
@@ -114,9 +114,39 @@ process_geo_file("tests/examples/example0.geo", "tests/example_results", options
 After installation, you can also use the packaged command:
 
 ```bash
-cuger -s tests/examples/example0.geo -o tests/example_results -l medium
-cuger -i tests/examples -o tests/example_results -l medium
+cuger -s tests/examples/example0.geo -o tests/examples_results -l medium
+cuger -i tests/examples -o tests/examples_results -l medium
+
+# only run simplify + convexify
+cuger -i tests/examples -o tests/examples_results -l medium --skip-moosas --skip-graph
+
+# do not save figures
+cuger -i tests/examples -o tests/examples_results -l medium --no-convex-figure --no-graph-figure
+
+# choose export formats when Moosas is enabled
+cuger -i tests/examples -o tests/examples_results -l medium --formats geo xml idf rdf
 ```
+
+### Batch EnergyPlus Simulation (`ep_test.py`)
+
+For EnergyPlus batch runs (all IDF/EPW combinations) and CSV export:
+
+```bash
+python ep_test.py
+
+# or provide explicit directories
+python ep_test.py \
+  --idf-dir data/new_idf \
+  --epw-dir data/weather \
+  --csv-dir data/csv_outputs \
+  --eplus-root C:/EnergyPlusV24-2-0
+```
+
+Notes:
+
+- The script recursively scans `--idf-dir` for `.idf` files.
+- It recursively scans `--epw-dir` for `.epw` or `.zip` (zip must contain at least one `.epw`).
+- Output CSV file names are generated from relative paths to avoid collisions.
 
 ### Publish to PyPI
 
@@ -201,19 +231,13 @@ git push origin v0.1.1
 
 If you want to dry-run to TestPyPI first, use **Actions -> Publish Python Package -> Run workflow -> repository=testpypi**.
 
-### Run with CLI (`main.py`)
+### Run from Python Module
 
-`main.py` supports interactive mode and command-line mode.
+You can also run the CLI module directly:
 
 ```bash
-# interactive mode
-python main.py
-
-# batch process a directory
-python main.py -i tests/examples -o tests/example_results -l medium
-
-# process a single file
-python main.py -s tests/examples/example0.geo -o tests/example_results -l low
+python -m cuger.cli -i tests/examples -o tests/examples_results -l medium
+python -m cuger.cli -s tests/examples/example0.geo -o tests/examples_results -l low
 ```
 
 LOD options:
@@ -249,19 +273,14 @@ CUGER operates through a series of processing modules. Each module consumes spec
 
 #### **Graph Outputs**
 
-
 - **`graph/<case_name>.json`**  
   Encodes all nodes (faces, spaces, openings, etc.) with geometric, semantic, and topological attributes.
   
   Encodes adjacency relations, directional edges, and multi-scale topology for downstream GNN tasks.
 
-<div style="display: flex; gap: 0pt;">
-  <img src="tests/example_results/figure_convex/example0_convex.png" 
-       style="height: 250pt; object-fit: cover; clip-path: inset(10% 15% 10% 15%);">
+![Convex decomposition example](tests/examples_results/figure_convex/example0_convex.png)
 
-  <img src="tests/example_results/figure_graph/example0_graph.png" 
-       style="height: 250pt; object-fit: cover; clip-path: inset(10% 15% 10% 15%);">
-</div>
+![Graph visualization example](tests/examples_results/figure_graph/example0_graph.png)
 
 #### **Exported Model Formats**
 
@@ -289,8 +308,9 @@ CUGER operates through a series of processing modules. Each module consumes spec
 
 Core entry points:
 
-- `main.py` (CLI + interactive processing)
+- `cuger/cli.py` (packaged CLI entry)
 - `test.py` (example pipeline run)
+- `ep_test.py` (EnergyPlus batch simulation + CSV export)
 - `cuger/__transform/process.py`
   - `simplify_process(...)`
   - `convex_process(...)`
@@ -326,4 +346,4 @@ If you used this project in your research, please cite the paper below:
     pages     = {},
     doi       = {10.26868/25222708.2025.1305}
 }
-``` 
+```

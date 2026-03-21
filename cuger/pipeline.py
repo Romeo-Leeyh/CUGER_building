@@ -155,7 +155,9 @@ def process_geo_directory(
 
     results = []
     for geo_file in geo_files:
-        modelname = str(geo_file.relative_to(root).with_suffix("")).replace("\\", "_").replace("/", "_")
+        # Use PurePath.as_posix() to get forward slashes, then replace as needed for model names
+        relative_posix = geo_file.relative_to(root).with_suffix("").as_posix()
+        modelname = relative_posix.replace("/", "_")
         results.append(
             process_geo_file(
                 geo_file,

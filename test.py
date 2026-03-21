@@ -1,26 +1,32 @@
-import os
 import sys
+from pathlib import Path
 
 # Ensure workspace root is importable when running this file directly
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-WORKSPACE_ROOT = os.path.dirname(CURRENT_DIR)
-if WORKSPACE_ROOT not in sys.path:
-    sys.path.insert(0, WORKSPACE_ROOT)
+CURRENT_DIR = Path(__file__).resolve().parent
+WORKSPACE_ROOT = CURRENT_DIR.parent
+if str(WORKSPACE_ROOT) not in sys.path:
+    sys.path.insert(0, str(WORKSPACE_ROOT))
 
 from cuger.__transform import process as ps
 import moosas.MoosasPy as Moosas
 
-# Define input/output directories
-input_dir = r"E:\\DATA\\CUGER_energy_data_0111\\all_medium\\geo"
-output_dir = r"E:\\DATA\\CUGER_energy_data_0111\\all_medium"
+# Define input/output directories (use pathlib for cross-platform compatibility)
+# Change these paths according to your local environment
+input_dir = Path("tests\examples")  # Relative path - works on all platforms
+output_dir = Path("tests\examples_results")  # Relative path - works on all platforms
+
+# For absolute paths on specific systems, use Path() instead of raw strings:
+# input_dir = Path("/home/user/data/geo")      # Linux
+# input_dir = Path("/Users/user/data/geo")     # macOS
+# input_dir = Path("C:/Users/user/data/geo")   # Windows (use forward slashes with Path)
 
 # Create output directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
+output_dir.mkdir(parents=True, exist_ok=True)
 
 
 def is_file_processed(modelname, lod="precise"):
     """Return True when the expected pipeline outputs for a model already exist."""
-    paths = ps.get_output_paths(modelname, output_dir, lod=lod)
+    paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
     required_outputs = [
         paths["simplified_geo_path"],
         paths["convex_geo_path"],
@@ -29,7 +35,7 @@ def is_file_processed(modelname, lod="precise"):
         paths["new_idf_path"],
         paths["output_graph_path"],
     ]
-    return all(os.path.exists(path) for path in required_outputs)
+    return all(Path(path).exists() for path in required_outputs)
 
 
 def process_file(input_geo_path, modelname, lod="precise"):
@@ -45,7 +51,7 @@ def process_file(input_geo_path, modelname, lod="precise"):
     lod : str
         Level of detail: 'precise', 'medium', or 'low'
     """
-    paths = ps.get_output_paths(modelname, output_dir, lod=lod)
+    paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
 
     print(f"Processing file: {input_geo_path}")
     print(f"  Model: {modelname}, LOD: {lod}")
@@ -54,7 +60,7 @@ def process_file(input_geo_path, modelname, lod="precise"):
     simplified_geo_path = paths["simplified_geo_path"]
     
     # Create output directory if needed
-    os.makedirs(os.path.dirname(simplified_geo_path), exist_ok=True)
+    Path(simplified_geo_path).parent.mkdir(parents=True, exist_ok=True)
     
     # Perform simplification
     print(f"  Step 1: Simplifying geometry (LOD={lod})...")
@@ -120,19 +126,17 @@ def main():
     print(f"Output directory: {output_dir}\n")
     
     # Check if input directory exists
-    if not os.path.exists(input_dir):
+    if not input_dir.exists():
         print(f"Error: Input directory not found: {input_dir}")
         return
     
-    # Get all GEO files
+    # Get all GEO files using pathlib for cross-platform compatibility
     geo_files = []
-    for dirpath, dirnames, filenames in os.walk(input_dir):
-        for filename in filenames:
-            if filename.endswith('.geo'):
-                input_geo_path = os.path.join(dirpath, filename).replace('\\', '/')
-                relative_path = os.path.relpath(input_geo_path, input_dir)
-                basename = os.path.splitext(relative_path)[0].replace('\\', '_')
-                geo_files.append((input_geo_path, basename))
+    for geo_filepath in sorted(input_dir.rglob('*.geo')):  # Recursive glob for all .geo files
+        relative_path = geo_filepath.relative_to(input_dir)
+        # Build modelname from relative path in a cross-platform way
+        basename = relative_path.with_suffix("").as_posix().replace("/", "_")
+        geo_files.append((geo_filepath, basename))
 
     if not geo_files:
         print(f"No GEO files found in {input_dir}")
@@ -141,7 +145,7 @@ def main():
     print(f"Found {len(geo_files)} GEO file(s) to process\n")
     
     # Process files with different LOD levels
-    lod = "medium"  # Change to 'medium' or 'low' as needed
+    lod = "precise"  # Change to 'medium' or 'low' as needed
     processed_count = 0
     skipped_count = 0
 

@@ -1,4 +1,3 @@
-import os
 import json
 import numpy as np
 import networkx as nx
@@ -173,21 +172,21 @@ def analyze_graph_properties(G):
 def batch_process_graphs(root_dir, output_csv):
     """批量处理多个子文件夹中的图，并保存为CSV"""
     results = []
-    
-    for subdir in os.listdir(root_dir):
-        subdir_path = os.path.join(root_dir, subdir)
-        if os.path.isdir(subdir_path):
+
+    root_path = Path(root_dir)
+    for subdir_path in root_path.iterdir():
+        if subdir_path.is_dir():
             try:
-                G = json_to_graph(subdir_path)
+                G = json_to_graph(str(subdir_path))
                 graph_properties = analyze_graph_properties(G)
-                graph_properties["graph_name"] = subdir  # 以子文件夹名作为图的名称
+                graph_properties["graph_name"] = subdir_path.name  # 以子文件夹名作为图的名称
                 results.append(graph_properties)
             except Exception as e:
-                print(f"处理 {subdir} 时出错: {e}")
+                print(f"处理 {subdir_path.name} 时出错: {e}")
 
     # 保存为CSV
     df = pd.DataFrame(results)
-    df.to_csv(output_csv, index=False)
+    df.to_csv(Path(output_csv), index=False)
 
 if __name__ == "__main__":
     batch_process_graphs("E:/DATA/Moosasbuildingdatasets/graph", "graph_properties.csv")

@@ -1,4 +1,7 @@
 import sys
+import os
+import io
+import contextlib
 from pathlib import Path
 
 # Ensure workspace root is importable when running this file directly
@@ -22,6 +25,30 @@ output_dir = Path("tests\examples_results")  # Relative path - works on all plat
 
 # Create output directory if it doesn't exist
 output_dir.mkdir(parents=True, exist_ok=True)
+
+
+@contextlib.contextmanager
+def suppress_output():
+    """Silence both Python-level and low-level stdout/stderr in this process."""
+    saved_stdout = sys.stdout
+    saved_stderr = sys.stderr
+    saved_stdout_fd = os.dup(1)
+    saved_stderr_fd = os.dup(2)
+
+    try:
+        with open(os.devnull, "w") as devnull:
+            sys.stdout = devnull
+            sys.stderr = devnull
+            os.dup2(devnull.fileno(), 1)
+            os.dup2(devnull.fileno(), 2)
+            yield
+    finally:
+        os.dup2(saved_stdout_fd, 1)
+        os.dup2(saved_stderr_fd, 2)
+        os.close(saved_stdout_fd)
+        os.close(saved_stderr_fd)
+        sys.stdout = saved_stdout
+        sys.stderr = saved_stderr
 
 
 def is_file_processed(modelname, lod="precise"):
@@ -90,13 +117,15 @@ def process_file(input_geo_path, modelname, lod="precise"):
     # Step 3: Transform with Moosas (optional, currently commented out)
     # Uncomment the following code to enable Moosas transformation
     try:
-        model = Moosas.transform(paths["convex_geo_path"], 
-                       solve_overlap=True, 
-                      divided_zones=False, 
-                      break_wall_horizontal=True, 
-                      solve_redundant=True,
-                       attach_shading=False,
-                       standardize=True) 
+        with suppress_output():
+            model = Moosas.transform(paths["convex_geo_path"], 
+                           solve_overlap=True, 
+                          divided_zones=False, 
+                          break_wall_horizontal=True, 
+                          solve_redundant=True,
+                           attach_shading=False,
+                           standardize=True,
+                           stdout=io.StringIO())
 
         Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
         Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")

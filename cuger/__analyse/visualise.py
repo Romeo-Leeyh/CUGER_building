@@ -4,7 +4,21 @@ Contains all visualization functions for convex faces and graphs
 """
 
 import numpy as np
+import warnings
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+
+
+def _save_figure(fig, file_path):
+    """Save figure while avoiding deprecated backend kwargs forwarding."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"savefig\(\) got unexpected keyword argument.*",
+            category=mpl.MatplotlibDeprecationWarning,
+        )
+        with mpl.rc_context({"savefig.edgecolor": "auto", "savefig.facecolor": "auto"}):
+            fig.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0)
 
 
 def plot_convex_faces(faces, lines, file_path, _fig_show=False, overlay_faces=None):
@@ -82,7 +96,7 @@ def plot_convex_faces(faces, lines, file_path, _fig_show=False, overlay_faces=No
     ax.set_axis_off()
     if _fig_show:
         plt.show()
-    plt.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0)
+    _save_figure(fig, file_path)
     plt.close()
 
 
@@ -217,6 +231,6 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
     ax.set_axis_off()
     if _fig_show:
         plt.show()
-    plt.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0)
+    _save_figure(fig, file_path)
     plt.close()
 

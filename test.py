@@ -2,6 +2,8 @@ import sys
 import os
 import io
 import contextlib
+import argparse
+import time
 from pathlib import Path
 
 # Ensure workspace root is importable when running this file directly
@@ -15,8 +17,8 @@ import moosas.MoosasPy as Moosas
 
 # Define input/output directories (use pathlib for cross-platform compatibility)
 # Change these paths according to your local environment
-input_dir = Path("tests\examples")  # Relative path - works on all platforms
-output_dir = Path("tests\examples_results")  # Relative path - works on all platforms
+input_dir = Path("/mnt/z/lyh/SRT/EVOMASS+/geo")  # Relative path - works on all platforms
+output_dir = Path("/mnt/z/lyh/SRT/EVOMASS+/")  # Relative path - works on all platforms
 
 # For absolute paths on specific systems, use Path() instead of raw strings:
 # input_dir = Path("/home/user/data/geo")      # Linux
@@ -80,9 +82,6 @@ def process_file(input_geo_path, modelname, lod="precise"):
     """
     paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
 
-    print(f"Processing file: {input_geo_path}")
-    print(f"  Model: {modelname}, LOD: {lod}")
-    
     # Step 1: Simplify the input geometry based on LOD
     simplified_geo_path = paths["simplified_geo_path"]
     
@@ -90,15 +89,11 @@ def process_file(input_geo_path, modelname, lod="precise"):
     Path(simplified_geo_path).parent.mkdir(parents=True, exist_ok=True)
     
     # Perform simplification
-    print(f"  Step 1: Simplifying geometry (LOD={lod})...")
-
     ps.simplify_process(input_geo_path, simplified_geo_path, 
                         figure_path=None, lod=lod)
-    print(f"    [OK] Simplified geometry saved to: {simplified_geo_path}")
 
     
     # Step 2: Convexify the simplified geometry
-    print(f"  Step 2: Convexifying simplified geometry...")
     try:
         ps.convex_process(
             simplified_geo_path,
@@ -106,10 +101,9 @@ def process_file(input_geo_path, modelname, lod="precise"):
             paths["figure_convex_path"],
             overlay_geo_path=input_geo_path,
         )
-        print(f"    [OK] Convexified geometry saved to: {paths['convex_geo_path']}")
 
     except Exception as e:
-        print(f"    [FAILED] Convexification failed: {e}")
+        _ = e
         return False
     
     
@@ -127,32 +121,66 @@ def process_file(input_geo_path, modelname, lod="precise"):
                            standardize=True,
                            stdout=io.StringIO())
 
-        Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
-        Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-        #Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
-        Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
-        print(f"    ✓ Moosas transformation completed")
+            Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
+            Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
+            #Moosas.saveModel(model, paths["new_rdf_path"], save_type="rdf")
+            Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
     
     except Exception as e:
-        print(f"    ✗ Moosas transformation failed: {e}")
+        _ = e
     
     # Step 4: Generate graph (optional, currently commented out)
     # Uncomment the following code to enable graph generation
     try:
         ps.graph_process(paths["new_geo_path"], paths["new_xml_path"], 
                         paths["output_graph_path"], paths["figure_graph_path"])
-        print(f"    ✓ Graph generated")
     except Exception as e:
-        print(f"    ✗ Graph generation failed: {e}")
+        _ = e
 
     return True
 
 
+def parse_args():
+    """Parse optional CLI args for worker-based sharding."""
+    parser = argparse.ArgumentParser(
+        description="Process GEO files through CUGER pipeline."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Total number of workers used for static file sharding.",
+    )
+    parser.add_argument(
+        "--worker-index",
+        type=int,
+        default=0,
+        help="Current worker index in [0, workers-1].",
+    )
+    parser.add_argument(
+        "--lod",
+        type=str,
+        default="precise",
+        choices=["precise", "medium", "low"],
+        help="Level of detail for simplification.",
+    )
+    return parser.parse_args()
+
+
 def main():
     """Main function to process all GEO files with different LOD levels."""
-    
-    print(f"\nInput directory: {input_dir}")
-    print(f"Output directory: {output_dir}\n")
+    args = parse_args()
+    workers = args.workers
+    worker_index = args.worker_index
+
+    if workers < 1:
+        print(f"Error: --workers must be >= 1, got {workers}")
+        return
+    if worker_index < 0 or worker_index >= workers:
+        print(
+            f"Error: --worker-index must be in [0, {workers - 1}], got {worker_index}"
+        )
+        return
     
     # Check if input directory exists
     if not input_dir.exists():
@@ -171,32 +199,64 @@ def main():
         print(f"No GEO files found in {input_dir}")
         return
     
-    print(f"Found {len(geo_files)} GEO file(s) to process\n")
+    geo_files = [
+        pair for idx, pair in enumerate(geo_files) if idx % workers == worker_index
+    ]
+    total_assigned = len(geo_files)
     
     # Process files with different LOD levels
-    lod = "precise"  # Change to 'medium' or 'low' as needed
+    lod = args.lod
     processed_count = 0
     skipped_count = 0
+    failed_count = 0
+
+    # Emit initial progress so the parallel runner can display global totals early.
+    print(
+        f"progress worker={worker_index} completed=0/{total_assigned} "
+        f"skipped=0 processed=0 failed=0 elapsed_s=0.0",
+        flush=True,
+    )
+
+    start_time = time.time()
 
         
     for input_geo_path, basename in geo_files:
         if is_file_processed(basename, lod=lod):
-            print(f"[SKIPPED] Already processed: {basename}\n")
             skipped_count += 1
+            completed = skipped_count + processed_count + failed_count
+            elapsed_s = time.time() - start_time
+            print(
+                f"progress worker={worker_index} completed={completed}/{total_assigned} "
+                f"skipped={skipped_count} processed={processed_count} failed={failed_count} "
+                f"elapsed_s={elapsed_s:.1f} current={basename}",
+                flush=True,
+            )
             continue
 
         if process_file(input_geo_path, basename, lod=lod):
-            print(f"[OK] Successfully processed: {basename}\n")
             processed_count += 1
         else:
-            print(f"[FAILED] Failed to process: {basename}\n")
-        
+            failed_count += 1
 
-    
-    print("=" * 80)
-    print(f"Processed: {processed_count}, Skipped: {skipped_count}, Total: {len(geo_files)}")
-    print("Processing complete!")
-    print("=" * 80)
+        completed = skipped_count + processed_count + failed_count
+        elapsed_s = time.time() - start_time
+        print(
+            f"progress worker={worker_index} completed={completed}/{total_assigned} "
+            f"skipped={skipped_count} processed={processed_count} failed={failed_count} "
+            f"elapsed_s={elapsed_s:.1f} current={basename}",
+            flush=True,
+        )
+
+    if hasattr(os, "sched_getaffinity"):
+        affinity = sorted(os.sched_getaffinity(0))
+        core_label = ",".join(str(c) for c in affinity)
+    else:
+        core_label = "N/A"
+
+    print(
+        f"core={core_label} assigned={total_assigned} "
+        f"already_processed={skipped_count} processed_now={processed_count} failed={failed_count}"
+    )
 
 
 if __name__ == "__main__":

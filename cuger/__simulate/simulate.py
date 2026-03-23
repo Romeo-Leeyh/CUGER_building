@@ -16,7 +16,7 @@ from typing import Optional, List, Tuple
 from eppy.modeleditor import IDF
 from pathlib import Path
 
-from idfedit import IDFEdit 
+from .idfedit import IDFEdit 
 
 
 
@@ -297,7 +297,7 @@ def run_single_simulation(
     modify_outputs: bool = True,
     output_variables: Optional[List[Tuple[str, str, str]]] = None,
     diagnostics: Optional[List[str]] = None,
-    verbose: bool = True
+    verbose: bool = False
 ) -> Tuple[bool, Optional[str]]:
     """
     Run a single EnergyPlus simulation with optional IDF modification.

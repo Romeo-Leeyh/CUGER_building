@@ -82,7 +82,7 @@ class SQLReader:
         
         for available_output in self.available_outputs:
             output_name = available_output['output_name']
-            print(f"Processing output: {output_name}")
+            #print(f"Processing output: {output_name}")
             
             data = self.sql.data_collections_by_output_name(output_name)
             

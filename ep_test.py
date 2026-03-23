@@ -2,6 +2,7 @@
 """
 
 import argparse
+import csv
 import os
 import random
 import tempfile
@@ -53,25 +54,37 @@ def _format_core_status(active_workers: int, workers: int) -> str:
 		labels.append(f"C{idx + 1}:{state}")
 	return " ".join(labels)
 
+
 def _build_jobs(
     idf_files: list[Path],
     weather_files: list[Path],
-    mode: str,
     rng: random.Random,
 ) -> list[tuple[Path, Path]]:
+	k = max(1, len(weather_files))
+	jobs: list[tuple[Path, Path]] = []
+	for idf_path in idf_files:
+		sampled_weather = [rng.choice(weather_files) for _ in range(k)]
+		for weather_path in sampled_weather:
+			jobs.append((idf_path, weather_path))
+	return jobs
 
-    if mode == "idf-random-weather":
-        k = max(1, int(len(weather_files)))
-        jobs = []
 
-        for idf in idf_files:
-
-            sampled_weather = [rng.choice(weather_files) for _ in range(k)]
-
-            for epw in sampled_weather:
-                jobs.append((idf, epw))
-
-        return jobs
+def _write_job_pairs_csv(
+	jobs: list[tuple[Path, Path]],
+	idf_dir: Path,
+	epw_dir: Path,
+	csv_dir: Path,
+) -> Path:
+	out_csv = csv_dir / "job_pairs.csv"
+	with out_csv.open("w", newline="", encoding="utf-8") as fp:
+		writer = csv.writer(fp)
+		writer.writerow(["job_index", "idf_path", "weather_path", "idf_tag", "weather_tag", "job_tag"])
+		for idx, (idf_path, weather_path) in enumerate(jobs, start=1):
+			idf_tag = _build_tag(idf_path, idf_dir)
+			weather_tag = _build_tag(weather_path, epw_dir)
+			job_tag = f"{idf_tag}__{weather_tag}"
+			writer.writerow([idx, str(idf_path), str(weather_path), idf_tag, weather_tag, job_tag])
+	return out_csv
 
 
 def _ensure_worker_eplus(eplus_root_str: str | None) -> None:
@@ -163,12 +176,6 @@ def build_parser() -> argparse.ArgumentParser:
 		default=1.0,
 		help="Random ratio (0,1] of weather files to use",
 	)
-	parser.add_argument(
-		"--match-mode",
-		choices=("cartesian", "random-pair","idf-random-weather"),
-		default="idf-random-weather",
-		help="Matching strategy after sampling",
-	)
 	parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling")
 	parser.add_argument("--quiet", action="store_true", help="Reduce log output")
 	return parser
@@ -210,7 +217,7 @@ def main() -> int:
 	rng = random.Random(args.seed)
 	idf_files = _sample_files(idf_files, args.idf_ratio, rng)
 	weather_files = _sample_files(weather_files, args.weather_ratio, rng)
-	jobs = _build_jobs(idf_files, weather_files, args.match_mode, rng)
+	jobs = _build_jobs(idf_files, weather_files, rng)
 	if not jobs:
 		print("No simulation jobs generated after sampling and matching.")
 		return 1
@@ -246,8 +253,15 @@ def main() -> int:
 		for idf_path, weather_path in jobs
 	]
 
+	try:
+		pairs_csv = _write_job_pairs_csv(jobs, idf_dir, epw_dir, csv_dir)
+	except OSError as exc:
+		print(f"Failed to write job-pairs CSV: {exc}")
+		return 1
+
 	if not args.quiet:
 		print(f"Total files: IDF={len(idf_files)}, Weather={len(weather_files)}, Jobs={total}")
+		print(f"Job pairs CSV: {pairs_csv}")
 
 	job_iter = iter(job_payloads)
 	active_futures = set()

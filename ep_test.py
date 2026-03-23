@@ -63,7 +63,7 @@ def _build_jobs(
 	k = max(1, len(weather_files))
 	jobs: list[tuple[Path, Path]] = []
 	for idf_path in idf_files:
-		sampled_weather = [rng.choice(weather_files) for _ in range(k)]
+		sampled_weather = rng.sample(weather_files, k)
 		for weather_path in sampled_weather:
 			jobs.append((idf_path, weather_path))
 	return jobs

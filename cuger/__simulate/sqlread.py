@@ -247,7 +247,7 @@ class SQLReader:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_file, index=True)
-        print(f"Exported external loads for {len(zone_ids)} zones to {output_file}")
+        #print(f"Exported external loads for {len(zone_ids)} zones to {output_file}")
     
     @staticmethod
     def analyze_results(sql_path: str, data_dir: str) -> None:

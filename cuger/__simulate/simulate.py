@@ -10,6 +10,8 @@ This module provides:
 - Output variable configuration
 """
 
+import os
+import contextlib
 import zipfile
 import tempfile
 from typing import Optional, List, Tuple
@@ -277,13 +279,23 @@ def run_eplus(
     
     # Run EnergyPlus
     try:
-        idf.run(
-            output_directory=str(run_dir),
-            verbose=verbose
-        )
+        if str(verbose).lower() == "q":
+            # suppress EnergyPlus process stdout/stderr when quiet mode is requested
+            with open(os.devnull, "w", encoding="utf-8", errors="ignore") as devnull:
+                with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+                    idf.run(
+                        output_directory=str(run_dir),
+                        verbose=verbose
+                    )
+        else:
+            idf.run(
+                output_directory=str(run_dir),
+                verbose=verbose
+            )
         return True
     except Exception as e:
-        print(f"❌ Simulation failed: {e}")
+        if str(verbose).lower() != "q":
+            print(f"❌ Simulation failed: {e}")
         return False
     finally:
         if temp_epw_dir is not None:

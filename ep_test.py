@@ -3,7 +3,6 @@
 
 import argparse
 import csv
-import json
 import os
 import random
 import tempfile
@@ -14,9 +13,9 @@ from cuger.__simulate.simulate import locate_eplus, run_single_simulation
 from cuger.__simulate.sqlread import SQLReader  
 
 
-DEFAULT_IDF_DIR = Path(r"Z:\lyh\SRT\All_DATA\idf")
+DEFAULT_IDF_DIR = Path(r"Z:\lyh\SRT\All_DATA_SRT\idf")
 DEFAULT_EPW_DIR = Path(r"Z:\lyh\SRT\WEATHER")
-DEFAULT_CSV_DIR = Path(r"Z:\lyh\SRT\All_DATA\data")
+DEFAULT_CSV_DIR = Path(r"Z:\lyh\SRT\All_DATA_SRT\data")
 DEFAULT_WORKERS = 8
 
 _WORKER_EPLUS_READY = False
@@ -87,55 +86,14 @@ def _write_job_pairs_csv(
 			"weather_tag",
 			"job_tag",
 			"status",
+			"result",
 		])
 		for idx, (idf_path, weather_path) in enumerate(jobs, start=1):
 			idf_tag = _build_tag(idf_path, idf_dir)
 			weather_tag = _build_tag(weather_path, epw_dir)
 			job_tag = f"{idf_tag}__{weather_tag}"
-			writer.writerow([idx, str(idf_path), str(weather_path), idf_tag, weather_tag, job_tag, "pending"])
+			writer.writerow([idx, str(idf_path), str(weather_path), idf_tag, weather_tag, job_tag, "pending", 0])
 	return out_csv
-
-
-def _write_job_pairs_json(
-	jobs: list[tuple[Path, Path]],
-	idf_dir: Path,
-	epw_dir: Path,
-	csv_dir: Path,
-) -> Path:
-	out_json = csv_dir / "job_pairs.json"
-	out_data: list[dict[str, str]] = []
-	for idx, (idf_path, weather_path) in enumerate(jobs, start=1):
-		idf_tag = _build_tag(idf_path, idf_dir)
-		weather_tag = _build_tag(weather_path, epw_dir)
-		job_tag = f"{idf_tag}__{weather_tag}"
-		out_data.append({
-			"job_index": idx,
-			"idf_path": str(idf_path),
-			"weather_path": str(weather_path),
-			"idf_tag": idf_tag,
-			"weather_tag": weather_tag,
-			"job_tag": job_tag,
-			"status": "pending",
-		})
-	with out_json.open("w", encoding="utf-8") as fp:
-		json.dump(out_data, fp, ensure_ascii=False, indent=2)
-	return out_json
-
-
-def _read_job_pairs_json(pairs_json_path: Path) -> list[dict[str, str]]:
-	jobs: list[dict[str, str]] = []
-	with pairs_json_path.open("r", encoding="utf-8") as fp:
-		for row in json.load(fp):
-			if not isinstance(row, dict):
-				continue
-			if not row.get("idf_path") or not row.get("weather_path") or not row.get("job_tag"):
-				continue
-			jobs.append({
-				"idf_path": row.get("idf_path", ""),
-				"weather_path": row.get("weather_path", ""),
-				"job_tag": row.get("job_tag", ""),
-			})
-	return jobs
 
 
 def _read_job_pairs_csv(pairs_csv_path: Path) -> list[dict[str, str]]:
@@ -150,26 +108,24 @@ def _read_job_pairs_csv(pairs_csv_path: Path) -> list[dict[str, str]]:
 
 
 def _read_job_pairs(path: Path) -> list[dict[str, str]]:
-	if path.suffix.lower() == ".json":
-		return _read_job_pairs_json(path)
-	elif path.suffix.lower() == ".csv":
+	if path.suffix.lower() == ".csv":
 		return _read_job_pairs_csv(path)
 	else:
-		raise ValueError(f"Unsupported job file format: {path}")
+		raise ValueError(f"Unsupported job file format: {path}. Only CSV format is supported.")
 
 
 def _update_job_status(job_pairs_path: Path, job_tag: str, status: str) -> None:
 	"""Update the status of a specific job in the job pairs file."""
-	if job_pairs_path.suffix.lower() == ".json":
-		_update_job_status_json(job_pairs_path, job_tag, status)
-	else:
-		_update_job_status_csv(job_pairs_path, job_tag, status)
+	_update_job_status_csv(job_pairs_path, job_tag, status)
 
 
 def _update_job_status_csv(job_pairs_path: Path, job_tag: str, status: str) -> None:
 	"""Update the status of a specific job in CSV format."""
 	import tempfile
 	import shutil
+	
+	# Determine result value based on status
+	result = 1 if status == "completed" else (-1 if status == "failed" else 0)
 	
 	# Read all rows
 	rows = []
@@ -179,6 +135,7 @@ def _update_job_status_csv(job_pairs_path: Path, job_tag: str, status: str) -> N
 		for row in reader:
 			if row.get("job_tag") == job_tag:
 				row["status"] = status
+				row["result"] = str(result)
 			rows.append(row)
 	
 	# Write back with updated status
@@ -190,26 +147,13 @@ def _update_job_status_csv(job_pairs_path: Path, job_tag: str, status: str) -> N
 		shutil.move(tmp_fp.name, job_pairs_path)
 
 
-def _update_job_status_json(job_pairs_path: Path, job_tag: str, status: str) -> None:
-	"""Update the status of a specific job in JSON format."""
-	with job_pairs_path.open("r", encoding="utf-8") as fp:
-		data = json.load(fp)
-	
-	for item in data:
-		if isinstance(item, dict) and item.get("job_tag") == job_tag:
-			item["status"] = status
-			break
-	
-	with job_pairs_path.open("w", encoding="utf-8") as fp:
-		json.dump(data, fp, ensure_ascii=False, indent=2)
-
-
 def _filter_completed_jobs(job_records: list[dict[str, str]], csv_dir: Path) -> tuple[list[tuple[Path, Path]], int]:
 	pending: list[tuple[Path, Path]] = []
 	completed = 0
 	for row in job_records:
 		job_tag = row.get("job_tag", "")
 		status = row.get("status", "pending")
+		result = row.get("result", "0")
 		idf_path = row.get("idf_path")
 		weather_path = row.get("weather_path")
 		if not idf_path or not weather_path:
@@ -225,6 +169,14 @@ def _filter_completed_jobs(job_records: list[dict[str, str]], csv_dir: Path) -> 
 		if status in ("completed", "failed"):
 			completed += 1
 			continue
+		
+		# Also consider result -1 (failed) as done (don't retry failed jobs)
+		try:
+			if int(result) == -1:
+				completed += 1
+				continue
+		except (ValueError, TypeError):
+			pass  # Ignore invalid result values
 			
 		pending.append((Path(idf_path), Path(weather_path)))
 	return pending, completed
@@ -322,7 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling")
 	parser.add_argument("--quiet", action="store_true", help="Reduce log output")
 	parser.add_argument("--resume", action="store_true", help="Resume from existing job_pairs file in --csv-dir")
-	parser.add_argument("--job-file", default="job_pairs.csv", help="Job pairs metadata file (csv or json), default: job_pairs.csv")
+	parser.add_argument("--job-file", default="job_pairs.csv", help="Job pairs metadata file (CSV format), default: job_pairs.csv")
 	parser.add_argument("--log-interval", type=int, default=100, help="Print progress every N completed jobs (default:100)")
 	return parser
 
@@ -389,12 +341,9 @@ def main() -> int:
 			print("No simulation jobs generated after sampling and matching.")
 			return 1
 		try:
-			if job_pairs_path.suffix.lower() == ".json":
-				job_pairs_path = _write_job_pairs_json(jobs, idf_dir, epw_dir, csv_dir)
-			else:
-				job_pairs_path = _write_job_pairs_csv(jobs, idf_dir, epw_dir, csv_dir)
+			_write_job_pairs_csv(jobs, idf_dir, epw_dir, csv_dir)
 		except OSError as exc:
-			print(f"Failed to write job-pairs file: {exc}")
+			print(f"Failed to write job-pairs CSV: {exc}")
 			return 1
 
 	try:

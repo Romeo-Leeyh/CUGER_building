@@ -15,8 +15,10 @@ if str(WORKSPACE_ROOT) not in sys.path:
 from cuger.__transform import process as ps
 import moosas.MoosasPy as Moosas
 
-DEFAULT_INPUT_DIR = Path("/mnt/z/lyh/SRT/EVOMASS+/geo")
-DEFAULT_OUTPUT_DIR = Path("/mnt/z/lyh/SRT/EVOMASS+/")
+DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
+DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results")
+DEFAULT_LOD = "medium"
+DEFAULT_ENABLE_MINIMAL_CORE = True
 DEFAULT_WORKERS = os.cpu_count() or 1
 
 
@@ -111,7 +113,7 @@ def _process_file(
 
             Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
             Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-            Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
+            #Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
 
         ps.graph_process(
             paths["new_geo_path"],
@@ -156,13 +158,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--lod",
         type=str,
-        default="precise",
+        default=DEFAULT_LOD,
         choices=["precise", "medium", "low"],
         help="Level of detail for simplification.",
     )
     parser.add_argument(
         "--enable-minimal-core",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_ENABLE_MINIMAL_CORE,
         help="Inject a minimal core shaft into low/medium simplified geometry.",
     )
     parser.add_argument(

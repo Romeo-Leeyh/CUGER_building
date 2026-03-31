@@ -1,6 +1,6 @@
 from pathlib import Path
 from .convexify import *
-from .simplify import simplify_faces
+from .simplify import simplify_faces, inject_minimal_core
 from .graph import MoosasGraph
 from ..graphIO import *
 from ..__analyse.visualise import plot_convex_faces, plot_graph_3d
@@ -81,6 +81,7 @@ def simplify_process(
             simplified_normal,
             simplified_faces,
             simplified_holes,
+            lod=lod,
         )
 
     # Write simplified geometry data

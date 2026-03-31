@@ -37,7 +37,12 @@ def get_output_paths(modelname, output_dir, lod="precise"):
     return {key: str(value) for key, value in paths.items()}
 
 
-def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="precise"):
+def simplify_process(
+    input_geo_path,
+    output_geo_path,
+    lod="precise",
+    enable_minimal_core=False,
+):
     """
     Simplify the geometry in the input geo file and save the result.
 
@@ -46,6 +51,9 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
         output_geo_path (str): Path to save the simplified geometry file.
         figure_path (str, optional): Path to save a figure of the simplified geometry. Defaults to None.
         lod (str, optional): Level of detail for simplification ("precise", "medium", "low"). Defaults to "precise".
+        enable_minimal_core (bool, optional): If True, inject a minimal
+            core shaft into low/medium simplified geometry before writing
+            the simplified output. Defaults to False.
     """
     # Read geometry data
     cat, idd, normal, faces, holes = read_geo(input_geo_path)
@@ -65,6 +73,15 @@ def simplify_process(input_geo_path, output_geo_path, figure_path=None, lod="pre
         )
     else:
         raise ValueError("lod must be one of: precise, medium, low")
+
+    if enable_minimal_core and lod in ["medium", "low"]:
+        simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = inject_minimal_core(
+            simplified_cat,
+            simplified_idd,
+            simplified_normal,
+            simplified_faces,
+            simplified_holes,
+        )
 
     # Write simplified geometry data
     write_geo(output_geo_path, simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes)

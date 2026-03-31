@@ -76,6 +76,7 @@ def _process_file(
     output_dir_str: str,
     modelname: str,
     lod: str,
+    enable_minimal_core: bool,
 ) -> tuple[bool, str, str]:
     """Run the transform pipeline for one GEO file."""
     input_geo_path = Path(input_geo_path_str)
@@ -86,15 +87,14 @@ def _process_file(
         ps.simplify_process(
             str(input_geo_path),
             paths["simplified_geo_path"],
-            figure_path=None,
             lod=lod,
+            enable_minimal_core=enable_minimal_core,
         )
 
         ps.convex_process(
             paths["simplified_geo_path"],
             paths["convex_geo_path"],
             paths["figure_convex_path"],
-            overlay_geo_path=str(input_geo_path),
         )
 
         with suppress_output():
@@ -159,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="precise",
         choices=["precise", "medium", "low"],
         help="Level of detail for simplification.",
+    )
+    parser.add_argument(
+        "--enable-minimal-core",
+        action="store_true",
+        help="Inject a minimal core shaft into low/medium simplified geometry.",
     )
     parser.add_argument(
         "--log-interval",
@@ -232,7 +237,13 @@ def main() -> int:
     failed = 0
 
     job_payloads = [
-        (str(geo_path), str(output_dir), modelname, args.lod)
+        (
+            str(geo_path),
+            str(output_dir),
+            modelname,
+            args.lod,
+            args.enable_minimal_core,
+        )
         for geo_path, modelname in pending_jobs
     ]
 

@@ -19,6 +19,7 @@ DEFAULT_SAVE_FORMATS = ("geo", "xml", "idf")
 @dataclass(slots=True)
 class PipelineOptions:
     lod: str = "precise"
+    enable_minimal_core: bool = False
     run_moosas: bool = True
     generate_graph: bool = True
     save_formats: tuple[str, ...] = DEFAULT_SAVE_FORMATS
@@ -92,6 +93,7 @@ def process_geo_file(
         str(input_path),
         paths["simplified_geo_path"],
         lod=options.lod,
+        enable_minimal_core=options.enable_minimal_core,
     )
 
     convex_process(
@@ -132,6 +134,7 @@ def process_geo_file(
         "output_dir": str(output_path),
         "paths": paths,
         "lod": options.lod,
+        "enable_minimal_core": options.enable_minimal_core,
         "moosas_used": moosas_used,
         "graph_generated": options.generate_graph,
     }

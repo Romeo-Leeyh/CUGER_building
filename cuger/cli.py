@@ -13,6 +13,11 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("-i", "--input-dir", help="Directory containing .geo files")
     parser.add_argument("-o", "--output-dir", required=True, help="Output directory")
     parser.add_argument("-l", "--lod", default="precise", choices=["precise", "medium", "low"])
+    parser.add_argument(
+        "--enable-minimal-core",
+        action="store_true",
+        help="Inject a minimal core shaft into low/medium simplified geometry",
+    )
     parser.add_argument("--skip-moosas", action="store_true", help="Only run simplify + convexify")
     parser.add_argument("--skip-graph", action="store_true", help="Skip graph generation")
     parser.add_argument(
@@ -34,6 +39,7 @@ def main() -> int:
 
     options = PipelineOptions(
         lod=args.lod,
+        enable_minimal_core=args.enable_minimal_core,
         run_moosas=not args.skip_moosas,
         generate_graph=not args.skip_graph,
         save_formats=tuple(args.formats),

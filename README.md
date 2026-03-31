@@ -53,9 +53,9 @@ If you just want to try the algorithm to split building models, this step can be
 
 ## Usage
 
-### Run with Test Script
+### Run with Transform Test Script
 
-You can run the example script in `test.py`.  
+You can run the example script in `transform_test.py`.  
 This will process sample building models under `tests/examples/`  
 and generate outputs in `tests/examples_results/`.
 
@@ -78,12 +78,12 @@ tests
 To run the test:
 
 ```bash
-python test.py
+python transform_test.py
 ```
 
 ### Use as a Python package
 
-The public API follows the same main flow used in `test.py`:
+The public API follows the same main flow used in `transform_test.py`:
 
 ```python
 from cuger import PipelineOptions, process_geo_directory, process_geo_file
@@ -309,7 +309,7 @@ CUGER operates through a series of processing modules. Each module consumes spec
 Core entry points:
 
 - `cuger/cli.py` (packaged CLI entry)
-- `test.py` (example pipeline run)
+- `transform_test.py` (example pipeline run)
 - `ep_test.py` (EnergyPlus batch simulation + CSV export)
 - `cuger/__transform/process.py`
   - `simplify_process(...)`

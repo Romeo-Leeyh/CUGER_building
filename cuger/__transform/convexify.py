@@ -104,20 +104,21 @@ def convexify_faces(cat, idd, normal, faces, holes,
             
             subfaces = []
             for poly in polys:
+                candidate_face = verts[poly]
+
                 if valid_face: 
-                    if GeometryValidator._is_valid_face(verts[poly]):
-                        subfaces.append(verts[poly])
-                    if not GeometryValidator._is_valid_face(verts[poly]):
+                    if not GeometryValidator._is_valid_face(candidate_face):
                         print(f"    Skipping invalid sub-face in face {idd[idx]}")
                         continue
+
                 if clean_quad and len(poly) > 4:
-                    quad_poly = GeometryOperator.compute_max_inscribed_quadrilateral(verts[poly])
+                    quad_poly = GeometryOperator.compute_max_inscribed_quadrilateral(candidate_face)
                     if valid_face and not GeometryValidator._is_valid_face(quad_poly):
                         print(f"    Skipping invalid quadrilateral sub-face in face {idd[idx]}")
                         continue
-                    subfaces.append(np.array(quad_poly))
-                else:
-                    subfaces.append(verts[poly])
+                    candidate_face = np.array(quad_poly)
+
+                subfaces.append(candidate_face)
 
             if len(subfaces) == 1:
                 for i, subface in enumerate(subfaces):

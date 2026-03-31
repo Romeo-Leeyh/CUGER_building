@@ -12,13 +12,14 @@ WORKSPACE_ROOT = CURRENT_DIR.parent
 if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
-from cuger.__transform import process as ps
 import moosas.MoosasPy as Moosas
+from moosas.MoosasPy.IO._geo import _readGeo
+from moosas.MoosasPy.encoding.convexify import MoosasConvexify
+from moosas.MoosasPy.geometry.element import MoosasGeometry
+from moosas.MoosasPy.utils import np, pygeos
 
 DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
-DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results")
-DEFAULT_LOD = "precise"
-DEFAULT_ENABLE_MINIMAL_CORE = False
+DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results_moosas")
 DEFAULT_WORKERS = os.cpu_count() or 1
 
 
@@ -59,45 +60,88 @@ def _collect_geo_files(folder: Path) -> list[tuple[Path, str]]:
     return geo_files
 
 
-def is_file_processed(modelname: str, output_dir: Path, lod: str = "precise") -> bool:
-    """Return True when the expected pipeline outputs for a model already exist."""
-    paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
+def get_output_paths(modelname: str, output_dir: str) -> dict[str, str]:
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "convex_geo_path": output_root / "geo_c" / f"{modelname}_c.geo",
+        "new_geo_path": output_root / "new_geo" / f"{modelname}.geo",
+        "output_graph_path": output_root / "graph" / f"{modelname}.json",
+    }
+
+    for path in paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    return {key: str(value) for key, value in paths.items()}
+
+
+def is_file_processed(modelname: str, output_dir: Path) -> bool:
+    paths = get_output_paths(modelname, str(output_dir))
     required_outputs = [
-        paths["simplified_geo_path"],
         paths["convex_geo_path"],
         paths["new_geo_path"],
-        paths["new_xml_path"],
-        paths["new_idf_path"],
         paths["output_graph_path"],
     ]
     return all(Path(path).exists() for path in required_outputs)
+
+
+def _geometry_to_convex_inputs(geometry_list: list[MoosasGeometry]):
+    categories: list[int] = []
+    face_ids: list[str] = []
+    normals: list[np.ndarray] = []
+    faces: list[np.ndarray] = []
+    holes: list[list[np.ndarray]] = []
+
+    for geometry in geometry_list:
+        categories.append(int(geometry.category))
+        face_ids.append(str(geometry.faceId))
+        normals.append(
+            np.array(pygeos.get_coordinates(geometry.normal, include_z=True)[0], dtype=float)
+        )
+
+        boundary = pygeos.get_coordinates(geometry.boundary, include_z=True)[:-1]
+        faces.append(np.array(boundary, dtype=float))
+
+        geometry_holes: list[np.ndarray] = []
+        for hole in geometry.holes:
+            hole_coords = pygeos.get_coordinates(hole, include_z=True)[:-1]
+            geometry_holes.append(np.array(hole_coords, dtype=float))
+        holes.append(geometry_holes)
+
+    return categories, face_ids, normals, faces, holes
+
+
+def _convex_geometries_from_input_geo(input_geo_path: str) -> list[MoosasGeometry]:
+    geometry_list = _readGeo(input_geo_path)
+    categories, face_ids, normals, faces, holes = _geometry_to_convex_inputs(geometry_list)
+
+    convex_cat, convex_idd, convex_normal, convex_faces, _ = MoosasConvexify.convexify_faces(
+        categories,
+        face_ids,
+        normals,
+        faces,
+        holes,
+    )
+
+    return [
+        MoosasGeometry(face, face_id, normal=normal, category=int(cat))
+        for cat, face_id, normal, face in zip(
+            convex_cat, convex_idd, convex_normal, convex_faces
+        )
+    ]
 
 
 def _process_file(
     input_geo_path_str: str,
     output_dir_str: str,
     modelname: str,
-    lod: str,
-    enable_minimal_core: bool,
 ) -> tuple[bool, str, str]:
-    """Run the transform pipeline for one GEO file."""
-    input_geo_path = Path(input_geo_path_str)
-    output_dir = Path(output_dir_str)
-    paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
+    """Run the Moosas-only GEO -> convex GEO -> model -> graph pipeline for one GEO file."""
+    paths = get_output_paths(modelname, output_dir_str)
 
     try:
-        ps.simplify_process(
-            str(input_geo_path),
-            paths["simplified_geo_path"],
-            lod=lod,
-            enable_minimal_core=enable_minimal_core,
-        )
-
-        ps.convex_process(
-            paths["simplified_geo_path"],
-            paths["convex_geo_path"],
-            paths["figure_convex_path"],
-        )
+        convex_geometries = _convex_geometries_from_input_geo(input_geo_path_str)
+        Moosas.IO.writeGeo(paths["convex_geo_path"], geoList=convex_geometries)
 
         with suppress_output():
             model = Moosas.transform(
@@ -112,15 +156,7 @@ def _process_file(
             )
 
             Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
-            Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-            #Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
-
-        ps.graph_process(
-            paths["new_geo_path"],
-            paths["new_xml_path"],
-            paths["output_graph_path"],
-            paths["figure_graph_path"],
-        )
+            Moosas.saveModel(model, paths["output_graph_path"], save_type="graph")
     except Exception as exc:
         return False, modelname, str(exc)
 
@@ -137,7 +173,7 @@ def _format_core_status(active_workers: int, workers: int) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Batch run the CUGER transform pipeline for GEO files."
+        description="Batch run the Moosas-only GEO -> graph pipeline for GEO files."
     )
     parser.add_argument(
         "--input-dir",
@@ -147,26 +183,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-dir",
         default=str(DEFAULT_OUTPUT_DIR),
-        help="Output folder for transformed results.",
+        help="Output folder for Moosas convex GEO, transformed GEO, and graph JSON.",
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=DEFAULT_WORKERS,
         help="Number of worker processes for batch transforms.",
-    )
-    parser.add_argument(
-        "--lod",
-        type=str,
-        default=DEFAULT_LOD,
-        choices=["precise", "medium", "low"],
-        help="Level of detail for simplification.",
-    )
-    parser.add_argument(
-        "--enable-minimal-core",
-        action=argparse.BooleanOptionalAction,
-        default=DEFAULT_ENABLE_MINIMAL_CORE,
-        help="Inject a minimal core shaft into low/medium simplified geometry.",
     )
     parser.add_argument(
         "--log-interval",
@@ -215,7 +238,7 @@ def main() -> int:
     pending_jobs: list[tuple[Path, str]] = []
     skipped = 0
     for geo_path, modelname in geo_files:
-        if is_file_processed(modelname, output_dir, lod=args.lod):
+        if is_file_processed(modelname, output_dir):
             skipped += 1
             continue
         pending_jobs.append((geo_path, modelname))
@@ -244,8 +267,6 @@ def main() -> int:
             str(geo_path),
             str(output_dir),
             modelname,
-            args.lod,
-            args.enable_minimal_core,
         )
         for geo_path, modelname in pending_jobs
     ]

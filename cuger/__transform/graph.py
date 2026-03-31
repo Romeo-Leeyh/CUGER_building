@@ -3,8 +3,6 @@
 """
 
 import os
-from collections import defaultdict
-from itertools import combinations
 
 import pygeos
 import networkx as nx
@@ -190,55 +188,6 @@ class MoosasGraph:
         """Get all edges in the graph"""
         return self.graph.edges(data=True)
 
-    @staticmethod
-    def _quantize_vertex(vertex, tol: float = 1e-4):
-        coords = np.asarray(vertex, dtype=float)
-        return tuple(np.round(coords / tol).astype(np.int64).tolist())
-
-    @classmethod
-    def _face_edge_keys(cls, vertices, tol: float = 1e-4):
-        if vertices is None or len(vertices) < 2:
-            return set()
-
-        verts = np.asarray(vertices, dtype=float)
-        edge_keys = set()
-        for idx in range(len(verts)):
-            start = cls._quantize_vertex(verts[idx], tol=tol)
-            end = cls._quantize_vertex(verts[(idx + 1) % len(verts)], tol=tol)
-            if start == end:
-                continue
-            edge_keys.add(tuple(sorted((start, end))))
-
-        return edge_keys
-
-    def infer_face_adjacency_from_geometry(self, tol: float = 1e-4):
-        """
-        Backfill missing face-face adjacency by matching shared geometric edges.
-
-        Moosas XML neighbor lists can be incomplete for simplified OBB-like inputs.
-        When two face nodes share the same boundary segment, they should be adjacent
-        even if the XML omitted the relation.
-        """
-        edge_to_faces = defaultdict(set)
-
-        for nodeid, data in self.graph.nodes(data=True):
-            if data.get("node_type") != "face":
-                continue
-
-            face_params = data.get("face_params", {})
-            face_verts = face_params.get("v")
-            for edge_key in self._face_edge_keys(face_verts, tol=tol):
-                edge_to_faces[edge_key].add(nodeid)
-
-        for face_ids in edge_to_faces.values():
-            if len(face_ids) < 2:
-                continue
-
-            for u, v in combinations(sorted(face_ids), 2):
-                if self.graph.has_edge(u, v):
-                    continue
-                self.graph.add_edge(u, v, adj="adjacent")
-
     def graph_representation_new(self, root, cat, idd, normal, faces, holes):
 
         dict_u = {}
@@ -416,8 +365,6 @@ class MoosasGraph:
                 except Exception as e:
                     print(f"[Space Param Error] nodeid={nodeid}, {e}")
                     continue
-
-        self.infer_face_adjacency_from_geometry()
 
         return self.graph
 

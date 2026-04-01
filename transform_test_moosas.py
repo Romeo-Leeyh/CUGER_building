@@ -13,10 +13,8 @@ if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
 import moosas.MoosasPy as Moosas
-from moosas.MoosasPy.IO._geo import _readGeo
 from moosas.MoosasPy.encoding.convexify import MoosasConvexify
-from moosas.MoosasPy.geometry.element import MoosasGeometry
-from moosas.MoosasPy.utils import np, pygeos
+from moosas.MoosasPy.encoding.graphIO import read_geo, write_geo
 
 DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
 DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results_moosas")
@@ -85,50 +83,15 @@ def is_file_processed(modelname: str, output_dir: Path) -> bool:
     return all(Path(path).exists() for path in required_outputs)
 
 
-def _geometry_to_convex_inputs(geometry_list: list[MoosasGeometry]):
-    categories: list[int] = []
-    face_ids: list[str] = []
-    normals: list[np.ndarray] = []
-    faces: list[np.ndarray] = []
-    holes: list[list[np.ndarray]] = []
-
-    for geometry in geometry_list:
-        categories.append(int(geometry.category))
-        face_ids.append(str(geometry.faceId))
-        normals.append(
-            np.array(pygeos.get_coordinates(geometry.normal, include_z=True)[0], dtype=float)
-        )
-
-        boundary = pygeos.get_coordinates(geometry.boundary, include_z=True)[:-1]
-        faces.append(np.array(boundary, dtype=float))
-
-        geometry_holes: list[np.ndarray] = []
-        for hole in geometry.holes:
-            hole_coords = pygeos.get_coordinates(hole, include_z=True)[:-1]
-            geometry_holes.append(np.array(hole_coords, dtype=float))
-        holes.append(geometry_holes)
-
-    return categories, face_ids, normals, faces, holes
-
-
-def _convex_geometries_from_input_geo(input_geo_path: str) -> list[MoosasGeometry]:
-    geometry_list = _readGeo(input_geo_path)
-    categories, face_ids, normals, faces, holes = _geometry_to_convex_inputs(geometry_list)
-
-    convex_cat, convex_idd, convex_normal, convex_faces, _ = MoosasConvexify.convexify_faces(
+def _convexify_input_geo(input_geo_path: str):
+    categories, face_ids, normals, faces, holes = read_geo(input_geo_path)
+    return MoosasConvexify.convexify_faces(
         categories,
         face_ids,
         normals,
         faces,
         holes,
     )
-
-    return [
-        MoosasGeometry(face, face_id, normal=normal, category=int(cat))
-        for cat, face_id, normal, face in zip(
-            convex_cat, convex_idd, convex_normal, convex_faces
-        )
-    ]
 
 
 def _process_file(
@@ -140,8 +103,16 @@ def _process_file(
     paths = get_output_paths(modelname, output_dir_str)
 
     try:
-        convex_geometries = _convex_geometries_from_input_geo(input_geo_path_str)
-        Moosas.IO.writeGeo(paths["convex_geo_path"], geoList=convex_geometries)
+        convex_cat, convex_idd, convex_normal, convex_faces, _ = _convexify_input_geo(
+            input_geo_path_str
+        )
+        write_geo(
+            paths["convex_geo_path"],
+            convex_cat,
+            convex_idd,
+            convex_normal,
+            convex_faces,
+        )
 
         with suppress_output():
             model = Moosas.transform(

@@ -17,9 +17,9 @@ import moosas.MoosasPy as Moosas
 
 DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
 DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results")
-DEFAULT_LOD = "precise"
+DEFAULT_LOD = "low"
 DEFAULT_ENABLE_MINIMAL_CORE = False
-DEFAULT_WORKERS = os.cpu_count() or 1
+DEFAULT_WORKERS = 8
 
 
 @contextlib.contextmanager

@@ -10,11 +10,13 @@ This package provides:
 """
 
 from .idfedit import IDFEdit
+from .dataset import build_dataset_from_job_pairs
 from .sqlread import SQLReader
 from . import simulate
 
 __all__ = [
     'IDFEdit',
+    'build_dataset_from_job_pairs',
     'SQLReader',
     'simulate',
 ]

@@ -10,12 +10,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from cuger.__simulate.simulate import locate_eplus, run_single_simulation  
+from cuger.__simulate.dataset import build_dataset_from_job_pairs
 from cuger.__simulate.sqlread import SQLReader  
 
-
-DEFAULT_IDF_DIR = Path(r"Z:\lyh\SRT\All_DATA_SRT\idf")
-DEFAULT_EPW_DIR = Path(r"Z:\lyh\SRT\WEATHER")
-DEFAULT_CSV_DIR = Path(r"Z:\lyh\SRT\All_DATA_SRT\data")
+DEFAULT_IDF_DIR = Path(r"\\166.111.40.8\temp\lyh\SRT\All_DATA\idf")
+DEFAULT_EPW_DIR = Path(r"\\166.111.40.8\temp\lyh\SRT\WEATHER")
+DEFAULT_CSV_DIR = Path(r"\\166.111.40.8\temp\lyh\SRT\All_DATA\data")
+DEFAULT_GRAPH_DIR = Path(r"\\166.111.40.8\temp\lyh\SRT\All_DATA\graph")
+DEFAULT_DATASET_DIR = Path(r"\\166.111.40.8\temp\lyh\SRT\All_DATA\dataset")
 DEFAULT_WORKERS = 8
 
 _WORKER_EPLUS_READY = False
@@ -27,6 +29,23 @@ def _collect_files(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
 	return sorted(
 		p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in suffixes
 	)
+
+
+def _has_data_csv(csv_dir: Path) -> bool:
+	if not csv_dir.is_dir():
+		return False
+	for p in csv_dir.rglob("*.csv"):
+		if p.name.lower() != "job_pairs.csv":
+			return True
+	return False
+
+
+def _has_dataset_pkl(dataset_dir: Path) -> bool:
+	if not dataset_dir.is_dir():
+		return False
+	for _ in dataset_dir.rglob("*.pkl"):
+		return True
+	return False
 
 
 def _build_tag(file_path: Path, root_dir: Path) -> str:
@@ -152,32 +171,36 @@ def _filter_completed_jobs(job_records: list[dict[str, str]], csv_dir: Path) -> 
 	completed = 0
 	for row in job_records:
 		job_tag = row.get("job_tag", "")
-		status = row.get("status", "pending")
-		result = row.get("result", "0")
+		status = (row.get("status", "pending") or "pending").strip().lower()
+		result = (row.get("result", "0") or "0").strip()
 		idf_path = row.get("idf_path")
 		weather_path = row.get("weather_path")
 		if not idf_path or not weather_path:
 			continue
-		
-		# Check if output file exists (primary check)
-		out_csv = csv_dir / f"{job_tag}.csv"
-		if out_csv.exists():
-			completed += 1
+
+		# Respect explicit job status first.
+		# Pending jobs should always be executed when resuming.
+		if status == "pending":
+			pending.append((Path(idf_path), Path(weather_path)))
 			continue
-		
-		# Also consider completed/failed status as done (don't retry)
 		if status in ("completed", "failed"):
 			completed += 1
 			continue
-		
-		# Also consider result -1 (failed) as done (don't retry failed jobs)
+
+		# Fallback for legacy rows where status was not reliably maintained.
 		try:
-			if int(result) == -1:
+			result_num = int(result)
+			if result_num == -1:
 				completed += 1
 				continue
+			if result_num == 1:
+				out_csv = csv_dir / f"{job_tag}.csv"
+				if out_csv.exists():
+					completed += 1
+					continue
 		except (ValueError, TypeError):
-			pass  # Ignore invalid result values
-			
+			pass  # Treat invalid result values as pending.
+
 		pending.append((Path(idf_path), Path(weather_path)))
 	return pending, completed
 
@@ -235,6 +258,7 @@ def _run_job(
 			return True, tag, str(out_csv)
 		except Exception as exc:
 			return False, tag, f"SQL->CSV failed: {exc}"
+		
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -248,6 +272,8 @@ def build_parser() -> argparse.ArgumentParser:
 		help="Folder containing weather files (.epw or .zip containing .epw)",
 	)
 	parser.add_argument("--csv-dir", default=str(DEFAULT_CSV_DIR), help="Output folder for .csv files")
+	parser.add_argument("--graph-dir", default=str(DEFAULT_GRAPH_DIR), help="Folder containing graph .json files")
+	parser.add_argument("--dataset-dir", default=str(DEFAULT_DATASET_DIR), help="Output folder for dataset .pkl files")
 	parser.add_argument(
 		"--eplus-root",
 		default=None,
@@ -276,6 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--resume", action="store_true", help="Resume from existing job_pairs file in --csv-dir")
 	parser.add_argument("--job-file", default="job_pairs.csv", help="Job pairs metadata file (CSV format), default: job_pairs.csv")
 	parser.add_argument("--log-interval", type=int, default=100, help="Print progress every N completed jobs (default:100)")
+	parser.add_argument("--skip-dataset-step", action="store_true", help="Skip building dataset PKL files")
 	return parser
 
 
@@ -285,6 +312,8 @@ def main() -> int:
 	idf_dir = Path(args.idf_dir).expanduser()
 	epw_dir = Path(args.epw_dir).expanduser()
 	csv_dir = Path(args.csv_dir).expanduser()
+	graph_dir = Path(args.graph_dir).expanduser()
+	dataset_dir = Path(args.dataset_dir).expanduser()
 	try:
 		csv_dir.mkdir(parents=True, exist_ok=True)
 	except OSError as exc:
@@ -322,8 +351,24 @@ def main() -> int:
 
 	jobs: list[tuple[Path, Path]] = []
 	existing_done = 0
+	skip_simulation = False
+	auto_dataset_only = _has_data_csv(csv_dir) and (not _has_dataset_pkl(dataset_dir))
 
-	if job_pairs_path.exists() and args.resume:
+	if auto_dataset_only:
+		skip_simulation = True
+		if not args.quiet:
+			print("Detected existing CSV data and missing dataset PKL.")
+			print("Skip simulation and run dataset step only.")
+		if not job_pairs_path.exists():
+			print(f"job_pairs file not found: {job_pairs_path}")
+			print("Cannot map CSV records to IDF/EPW/graph without job metadata.")
+			return 1
+		job_records = _read_job_pairs(job_pairs_path)
+		jobs, existing_done = _filter_completed_jobs(job_records, csv_dir)
+		if not args.quiet:
+			print(f"Existing {len(job_records)} jobs, {existing_done} marked completed/failed, {len(jobs)} pending (ignored in dataset-only mode)")
+
+	if (not auto_dataset_only) and job_pairs_path.exists() and args.resume:
 		if not args.quiet:
 			print(f"Resuming from existing job pairs: {job_pairs_path}")
 		job_records = _read_job_pairs(job_pairs_path)
@@ -331,9 +376,10 @@ def main() -> int:
 		if not args.quiet:
 			print(f"Existing {len(job_records)} jobs, {existing_done} already done, {len(jobs)} pending")
 		if not jobs:
-			print("All jobs already completed. Exiting.")
-			return 0
-	else:
+			skip_simulation = True
+			if not args.quiet:
+				print("All jobs already completed. Skip simulation and continue to dataset step.")
+	elif not auto_dataset_only:
 		if job_pairs_path.exists() and not args.resume and not args.quiet:
 			print(f"Overwriting {job_pairs_path} in {csv_dir}")
 		jobs = _build_jobs(idf_files, weather_files, rng)
@@ -346,95 +392,90 @@ def main() -> int:
 			print(f"Failed to write job-pairs CSV: {exc}")
 			return 1
 
-	try:
-		exe_path, idd_path = locate_eplus(args.eplus_root)
-		if not args.quiet:
-			print(f"EnergyPlus executable: {exe_path}")
-			print(f"EnergyPlus IDD: {idd_path}")
-	except Exception as exc:
-		print(f"Failed to locate EnergyPlus: {exc}")
-		return 1
-
 	total_pending = len(jobs)
 	done = 0
 	ok = 0
 	failed = 0
-	logical_cpus = os.cpu_count() or 1
-	workers = min(args.workers, total_pending, logical_cpus)
-	overall_total = existing_done + total_pending
 
-	worker_eplus_root = str(Path(exe_path).parent)
+	if not skip_simulation:
+		try:
+			exe_path, idd_path = locate_eplus(args.eplus_root)
+			if not args.quiet:
+				print(f"EnergyPlus executable: {exe_path}")
+				print(f"EnergyPlus IDD: {idd_path}")
+		except Exception as exc:
+			print(f"Failed to locate EnergyPlus: {exc}")
+			return 1
 
-	job_payloads = [
-		(
-			str(idf_path),
-			str(weather_path),
-			str(idf_dir),
-			str(epw_dir),
-			str(csv_dir),
-			worker_eplus_root,
-			args.quiet,
-		)
-		for idf_path, weather_path in jobs
-	]
+		logical_cpus = os.cpu_count() or 1
+		workers = min(args.workers, total_pending, logical_cpus)
+		overall_total = existing_done + total_pending
 
-	if not args.quiet:
-		print(f"Total files: IDF={len(idf_files)}, Weather={len(weather_files)}, Pending jobs={total_pending}, Completed before run={existing_done}")
-		print(f"Job pairs file: {job_pairs_path}")
+		worker_eplus_root = str(Path(exe_path).parent)
 
-	job_iter = iter(job_payloads)
-	active_futures = set()
+		job_payloads = [
+			(
+				str(idf_path),
+				str(weather_path),
+				str(idf_dir),
+				str(epw_dir),
+				str(csv_dir),
+				worker_eplus_root,
+				args.quiet,
+			)
+			for idf_path, weather_path in jobs
+		]
 
-	with ProcessPoolExecutor(max_workers=workers) as executor:
-		for _ in range(workers):
-			try:
-				active_futures.add(executor.submit(_run_job, *next(job_iter)))
-			except StopIteration:
-				break
+		if not args.quiet:
+			print(f"Total files: IDF={len(idf_files)}, Weather={len(weather_files)}, Pending jobs={total_pending}, Completed before run={existing_done}")
+			print(f"Job pairs file: {job_pairs_path}")
 
-		while active_futures:
-			for future in as_completed(active_futures):
-				active_futures.remove(future)
-				done += 1
-				try:
-					success, _tag, _detail = future.result()
-				except Exception as exc:
-					failed += 1
-					# Update status to failed
-					try:
-						_update_job_status(job_pairs_path, _tag, "failed")
-					except Exception:
-						pass  # Ignore update errors
-				else:
-					if success:
-						ok += 1
-						# Update status to completed
-						try:
-							_update_job_status(job_pairs_path, _tag, "completed")
-						except Exception:
-							pass  # Ignore update errors
-					else:
-						failed += 1
-						# Update status to failed
-						try:
-							_update_job_status(job_pairs_path, _tag, "failed")
-						except Exception:
-							pass  # Ignore update errors
+		job_iter = iter(job_payloads)
+		active_futures = set()
 
+		with ProcessPoolExecutor(max_workers=workers) as executor:
+			for _ in range(workers):
 				try:
 					active_futures.add(executor.submit(_run_job, *next(job_iter)))
 				except StopIteration:
-					pass
+					break
 
-				if not args.quiet and (done % args.log_interval == 0 or done == total_pending):
-					core_status = _format_core_status(len(active_futures), workers)
-					processed = existing_done + done
-					print(
-						f"\rProcessed files: {processed}/{overall_total} | Core status: {core_status}",
-						end="",
-						flush=True,
-					)
-				break
+			while active_futures:
+				for future in as_completed(active_futures):
+					active_futures.remove(future)
+					done += 1
+					try:
+						success, _tag, _detail = future.result()
+					except Exception:
+						failed += 1
+					else:
+						if success:
+							ok += 1
+							try:
+								_update_job_status(job_pairs_path, _tag, "completed")
+							except Exception:
+								pass
+						else:
+							failed += 1
+							try:
+								_update_job_status(job_pairs_path, _tag, "failed")
+							except Exception:
+								pass
+
+					try:
+						active_futures.add(executor.submit(_run_job, *next(job_iter)))
+					except StopIteration:
+						pass
+
+					if not args.quiet and (done % args.log_interval == 0 or done == total_pending):
+						core_status = _format_core_status(len(active_futures), workers)
+						processed = existing_done + done
+						print(
+							f"\rProcessed files: {processed}/{overall_total} | Core status: {core_status}",
+							end="",
+							flush=True,
+						)
+					break
 
 	if not args.quiet:
 		print()
@@ -444,7 +485,38 @@ def main() -> int:
 	print(f"  Success in this run: {ok}")
 	print(f"  Failed in this run:  {failed}")
 	print(f"  Total attempted in this run: {ok + failed}")
-	return 0 if failed == 0 else 2
+
+	dataset_stats = {
+		"total_rows": 0,
+		"eligible": 0,
+		"built": 0,
+		"skipped_existing": 0,
+		"skipped_missing_input": 0,
+		"failed": 0,
+	}
+
+	if not args.skip_dataset_step:
+		dataset_stats = build_dataset_from_job_pairs(
+			job_pairs_path=job_pairs_path,
+			csv_dir=csv_dir,
+			graph_dir=graph_dir,
+			dataset_dir=dataset_dir,
+			epw_dir=epw_dir,
+			skip_existing=True,
+			quiet=args.quiet,
+		)
+		print("Dataset step finished")
+		print(f"  Eligible jobs:         {dataset_stats['eligible']}")
+		print(f"  Newly built PKL:       {dataset_stats['built']}")
+		print(f"  Skipped existing PKL:  {dataset_stats['skipped_existing']}")
+		print(f"  Skipped missing input: {dataset_stats['skipped_missing_input']}")
+		print(f"  Failed in dataset step:{dataset_stats['failed']}")
+
+	if failed > 0:
+		return 2
+	if dataset_stats["failed"] > 0:
+		return 3
+	return 0
 
 
 if __name__ == "__main__":

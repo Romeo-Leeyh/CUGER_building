@@ -12,9 +12,16 @@ import csv
 import pickle
 import zipfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
+
+import pandas as pd
 
 from cuger.graphIO import json_to_graph
+
+try:
+    from prep import dataload as dl
+except Exception:  # noqa: BLE001
+    dl = None
 
 
 def _safe_float(value: str, default: float = 0.0) -> float:
@@ -24,21 +31,14 @@ def _safe_float(value: str, default: float = 0.0) -> float:
         return default
 
 
-def _read_energy_csv(csv_path: Path) -> Dict[str, List[float]]:
-    with csv_path.open("r", newline="", encoding="utf-8") as fp:
-        reader = csv.DictReader(fp)
-        if not reader.fieldnames:
-            return {}
-
-        series: Dict[str, List[float]] = {
-            name: [] for name in reader.fieldnames if name and name.lower() != "hour"
-        }
-
-        for row in reader:
-            for name in series:
-                series[name].append(_safe_float(row.get(name, "0")))
-
-    return series
+def _read_energy_csv(csv_path: Path) -> pd.DataFrame:
+    df = pd.read_csv(csv_path)
+    hour_cols = [c for c in df.columns if c.lower() == "hour"]
+    if hour_cols:
+        df = df.drop(columns=hour_cols)
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
 
 
 def _read_weather_rows(epw_path: Path) -> tuple[List[str], List[List[str]]]:
@@ -59,7 +59,7 @@ def _read_weather_rows(epw_path: Path) -> tuple[List[str], List[List[str]]]:
     return header, body
 
 
-def _read_weather_data(epw_path: Path) -> Dict[str, object]:
+def _read_weather_data(epw_path: Path) -> pd.DataFrame:
     header, rows = _read_weather_rows(epw_path)
 
     parsed = {
@@ -83,10 +83,47 @@ def _read_weather_data(epw_path: Path) -> Dict[str, object]:
         parsed["diffuse_horizontal_radiation"].append(_safe_float(row[14] if len(row) > 14 else "0"))
         parsed["wind_speed"].append(_safe_float(row[20] if len(row) > 20 else "0"))
 
+    df = pd.DataFrame(parsed)
+    # Preserve EPW metadata used by some downstream scripts.
+    df.attrs["epw_source"] = str(epw_path)
+    df.attrs["epw_header"] = header
+    return df
+
+
+def _build_payload_new_batch_style(
+    weather_path: Path,
+    graph_path: Path,
+    csv_path: Path,
+) -> Dict[str, object]:
+    """Build payload in the same high-level schema as new_batch.py.
+
+    Expected keys:
+    - weather
+    - building
+    - energy
+    """
+
+    if dl is not None:
+        weather_data = dl.input_weather(str(weather_path))
+        building_graph = dl.input_building(str(graph_path))
+        energy_data = dl.input_energy(str(csv_path))
+        building_data = dl.align_and_reorder_graph_by_energy(building_graph, energy_data)
+        valid_spaces = building_data.get("valid_energy_spaces") if isinstance(building_data, dict) else None
+        if valid_spaces is not None:
+            try:
+                energy_data = energy_data[valid_spaces]
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "weather": weather_data,
+            "building": building_data,
+            "energy": energy_data,
+        }
+
     return {
-        "source": str(epw_path),
-        "header": header,
-        "series": parsed,
+        "weather": _read_weather_data(weather_path),
+        "building": json_to_graph(str(graph_path)),
+        "energy": _read_energy_csv(csv_path),
     }
 
 
@@ -216,15 +253,11 @@ def build_dataset_from_job_pairs(
         out_path = dataset_dir / f"{job_tag}.pkl"
 
         try:
-            payload = {
-                "job_tag": job_tag,
-                "idf_path": str(idf_path),
-                "weather_path": str(resolved_weather_path),
-                "graph_path": str(graph_path),
-                "weather": _read_weather_data(resolved_weather_path),
-                "building": json_to_graph(str(graph_path)),
-                "energy": _read_energy_csv(csv_path),
-            }
+            payload = _build_payload_new_batch_style(
+                weather_path=resolved_weather_path,
+                graph_path=graph_path,
+                csv_path=csv_path,
+            )
             with out_path.open("wb") as fp:
                 pickle.dump(payload, fp, protocol=pickle.HIGHEST_PROTOCOL)
             stats["built"] += 1

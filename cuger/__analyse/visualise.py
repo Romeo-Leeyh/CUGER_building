@@ -17,8 +17,14 @@ def _save_figure(fig, file_path):
             message=r"savefig\(\) got unexpected keyword argument.*",
             category=mpl.MatplotlibDeprecationWarning,
         )
-        with mpl.rc_context({"savefig.edgecolor": "auto", "savefig.facecolor": "auto"}):
-            fig.savefig(file_path, dpi=300, bbox_inches='tight', pad_inches=0)
+        with mpl.rc_context({"savefig.edgecolor": "none", "savefig.facecolor": "none"}):
+            fig.savefig(
+                file_path,
+                dpi=300,
+                bbox_inches='tight',
+                pad_inches=0.08,
+                transparent=True,
+            )
 
 
 def plot_convex_faces(faces, lines, file_path, _fig_show=False, overlay_faces=None):
@@ -81,7 +87,8 @@ def plot_convex_faces(faces, lines, file_path, _fig_show=False, overlay_faces=No
     y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
     z_min, z_max = np.min(all_points[:, 2]), np.max(all_points[:, 2])
 
-    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0 * 0.6
+    # Keep all geometry in-frame with a small margin to avoid edge clipping.
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0 * 1.08
     mid_x = (x_max + x_min) / 2.0
     mid_y = (y_max + y_min) / 2.0
     mid_z = (z_max + z_min) / 2.0
@@ -113,7 +120,7 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
     _fig_show : bool
         Whether to show the figure
     """
-    fig = plt.figure(figsize=(12, 12))
+    fig = plt.figure(figsize=(4, 4))
     ax = fig.add_subplot(111, projection='3d')
     ax.view_init(elev=45, azim=15)
     
@@ -141,7 +148,7 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
             color = colors.get(node_type, 'brown')
             
             ax.scatter(center[0], center[1], center[2], 
-                    c=color, s=50, edgecolors='k')
+                    c=color, s=30, marker='D', edgecolors='k')
 
         if 'space_params' in graph.nodes[node]:
             center = graph.nodes[node]['space_params']['c']
@@ -156,37 +163,37 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
     # Draw edges
     for edge in graph.edges():
         start_node, end_node = edge
-        if ('face_params' in graph.nodes[start_node] and 
-            'face_params' in graph.nodes[end_node]):
-            
-            start_pos = graph.nodes[start_node]['face_params']['c']
-            end_pos = graph.nodes[end_node]['face_params']['c']
+        start_attrs = graph.nodes[start_node]
+        end_attrs = graph.nodes[end_node]
+        start_is_face = 'face_params' in start_attrs
+        end_is_face = 'face_params' in end_attrs
+        start_is_space = 'space_params' in start_attrs
+        end_is_space = 'space_params' in end_attrs
 
-            # Get edge attributes
+        if start_is_face and end_is_face:
+            start_pos = start_attrs['face_params']['c']
+            end_pos = end_attrs['face_params']['c']
+
             edge_attr = graph.edges[edge].get('attr', 'default')
             edge_color = '#999999' if edge_attr == 'default' else 'orange'
-            
-            # Draw edge
+
             ax.plot([start_pos[0], end_pos[0]],
                 [start_pos[1], end_pos[1]],
                 [start_pos[2], end_pos[2]],
-                color=edge_color, linestyle='-', alpha=0.05)
+                color=edge_color, linestyle='-', linewidth=1.2, alpha=0.35)
 
-        if ('space_params' in graph.nodes[start_node] and 
-            'face_params' in graph.nodes[end_node]):
-            
-            start_pos = graph.nodes[start_node]['space_params']['c']
-            end_pos = graph.nodes[end_node]['face_params']['c']
+        elif (start_is_space and end_is_face) or (start_is_face and end_is_space):
+            if start_is_space:
+                start_pos = start_attrs['space_params']['c']
+                end_pos = end_attrs['face_params']['c']
+            else:
+                start_pos = start_attrs['face_params']['c']
+                end_pos = end_attrs['space_params']['c']
 
-            # Get edge attributes
-            edge_attr = graph.edges[edge].get('attr', 'default')
-            edge_color = 'gray' 
-            
-            # Draw edge
             ax.plot([start_pos[0], end_pos[0]],
                 [start_pos[1], end_pos[1]],
                 [start_pos[2], end_pos[2]],
-                color=edge_color, linestyle='--', alpha=0.5)
+                color='#555555', linestyle='--', linewidth=1.8, alpha=0.9)
                 
         # Add legend
 
@@ -209,16 +216,16 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
     x_mid = (min(x_vals) + max(x_vals)) / 2
     y_mid = (min(y_vals) + max(y_vals)) / 2
     z_mid = (min(z_vals) + max(z_vals)) / 2
+    # Keep all graph nodes/edges in-frame with a small margin to avoid clipping.
     max_range = max(max(x_vals) - min(x_vals), 
                     max(y_vals) - min(y_vals), 
-                    max(z_vals) - min(z_vals)) / 2 * 0.6
+                    max(z_vals) - min(z_vals)) / 2 * 0.8
 
     ax.set_xlim(x_mid - max_range, x_mid + max_range)
     ax.set_ylim(y_mid - max_range, y_mid + max_range)
     ax.set_zlim(z_mid - max_range, z_mid + max_range)
 
-    # Adjust view distance to zoom
-    ax.dist = 4  # Decrease this value to zoom in; default is typically 10
+    # Use default camera distance to reduce risk of perspective clipping.
     
     legend_elements = [
         plt.Line2D([0], [0], marker='o', color='w', 
@@ -233,4 +240,3 @@ def plot_graph_3d(graph, file_path, _fig_show=False):
         plt.show()
     _save_figure(fig, file_path)
     plt.close()
-

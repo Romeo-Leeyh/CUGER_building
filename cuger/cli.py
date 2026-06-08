@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--enable-minimal-core",
         action="store_true",
-        help="Inject a minimal core shaft into low/medium simplified geometry",
+        help="Inject a minimal core shaft into the simplified geometry",
     )
     parser.add_argument("--skip-moosas", action="store_true", help="Only run simplify + convexify")
     parser.add_argument("--skip-graph", action="store_true", help="Skip graph generation")

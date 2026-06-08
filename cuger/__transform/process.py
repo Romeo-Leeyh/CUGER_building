@@ -52,7 +52,7 @@ def simplify_process(
         figure_path (str, optional): Path to save a figure of the simplified geometry. Defaults to None.
         lod (str, optional): Level of detail for simplification ("precise", "medium", "low"). Defaults to "precise".
         enable_minimal_core (bool, optional): If True, inject a minimal
-            core shaft into low/medium simplified geometry before writing
+            core shaft into the geometry before writing
             the simplified output. Defaults to False.
     """
     # Read geometry data
@@ -63,10 +63,19 @@ def simplify_process(
 
     # Perform simplification
     if lod == "precise":
-        # Copy the input geo file to the output path without modification
-        content = Path(input_geo_path).read_text(encoding="utf-8")
-        output_geo.write_text(content, encoding="utf-8")
-        return
+        if not enable_minimal_core:
+            # Preserve exact file contents when precise mode does not need mutation.
+            content = Path(input_geo_path).read_text(encoding="utf-8")
+            output_geo.write_text(content, encoding="utf-8")
+            return
+
+        simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = (
+            cat,
+            idd,
+            normal,
+            faces,
+            holes,
+        )
     elif lod in ["medium", "low"]:
         simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = simplify_faces(
             cat, idd, normal, faces, holes, lod=lod
@@ -74,7 +83,7 @@ def simplify_process(
     else:
         raise ValueError("lod must be one of: precise, medium, low")
 
-    if enable_minimal_core and lod in ["medium", "low"]:
+    if enable_minimal_core:
         simplified_cat, simplified_idd, simplified_normal, simplified_faces, simplified_holes = inject_minimal_core(
             simplified_cat,
             simplified_idd,

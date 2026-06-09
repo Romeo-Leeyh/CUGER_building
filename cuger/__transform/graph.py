@@ -392,6 +392,15 @@ class MoosasGraph:
                     continue
 
                 nbr_data = self.graph.nodes[nbr]
+                # Never collapse space/void nodes into an airwall.
+                if nbr_data.get("node_type") != "face":
+                    continue
+
+                nbr_face_type = nbr_data.get("face_params", {}).get("t")
+                # Keep horizontal envelope faces (including roof/floor semantics mapped to floor).
+                if nbr_face_type == "floor":
+                    continue
+
                 if nbr_data.get("node_type") == "face" and \
                 nbr_data.get("face_params", {}).get("t") == "airwall":
                     continue

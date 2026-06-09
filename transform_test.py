@@ -4,6 +4,7 @@ import io
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 # Ensure workspace root is importable when running this file directly.
@@ -15,11 +16,14 @@ if str(WORKSPACE_ROOT) not in sys.path:
 from cuger.__transform import process as ps
 import moosas.MoosasPy as Moosas
 
-DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
-DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results")
-DEFAULT_LOD = "low"
-DEFAULT_ENABLE_MINIMAL_CORE = False
+# DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
+# DEFAULT_OUTPUT_DIR = Path("cuger/tests/examples_results")
+DEFAULT_INPUT_DIR = Path("z:/lyh/ArchEGraph/_back/geo")
+DEFAULT_OUTPUT_DIR = Path("z:/lyh/ArchEGraph/_temp_ric")
+DEFAULT_LOD = "precise"
+DEFAULT_ENABLE_MINIMAL_CORE = True
 DEFAULT_WORKERS = 8
+DEFAULT_MAX_TASKS_PER_CHILD = 20
 
 
 @contextlib.contextmanager
@@ -86,20 +90,20 @@ def _process_file(
     paths = ps.get_output_paths(modelname, str(output_dir), lod=lod)
 
     try:
-        ps.simplify_process(
-            str(input_geo_path),
-            paths["simplified_geo_path"],
-            lod=lod,
-            enable_minimal_core=enable_minimal_core,
-        )
-
-        ps.convex_process(
-            paths["simplified_geo_path"],
-            paths["convex_geo_path"],
-            paths["figure_convex_path"],
-        )
-
         with suppress_output():
+            ps.simplify_process(
+                str(input_geo_path),
+                paths["simplified_geo_path"],
+                lod=lod,
+                enable_minimal_core=enable_minimal_core,
+            )
+
+            ps.convex_process(
+                paths["simplified_geo_path"],
+                paths["convex_geo_path"],
+                paths["figure_convex_path"],
+            )
+
             model = Moosas.transform(
                 paths["convex_geo_path"],
                 solve_overlap=True,
@@ -113,27 +117,18 @@ def _process_file(
 
             Moosas.saveModel(model, paths["new_geo_path"], save_type="geo")
             Moosas.saveModel(model, paths["new_xml_path"], save_type="xml")
-            #Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
+            Moosas.saveModel(model, paths["new_idf_path"], save_type="idf")
 
-        ps.graph_process(
-            paths["new_geo_path"],
-            paths["new_xml_path"],
-            paths["output_graph_path"],
-            paths["figure_graph_path"],
-        )
+            ps.graph_process(
+                paths["new_geo_path"],
+                paths["new_xml_path"],
+                paths["output_graph_path"],
+                paths["figure_graph_path"],
+            )
     except Exception as exc:
         return False, modelname, str(exc)
 
     return True, modelname, "ok"
-
-
-def _format_core_status(active_workers: int, workers: int) -> str:
-    labels: list[str] = []
-    for idx in range(workers):
-        state = "RUN" if idx < active_workers else "IDLE"
-        labels.append(f"C{idx + 1}:{state}")
-    return " ".join(labels)
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -179,6 +174,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reduce log output.",
     )
+    parser.add_argument(
+        "--max-tasks-per-child",
+        type=int,
+        default=DEFAULT_MAX_TASKS_PER_CHILD,
+        help=(
+            "Recycle each worker after N tasks to avoid long-run memory growth. "
+            "Set 0 to disable recycling."
+        ),
+    )
     return parser
 
 
@@ -194,6 +198,10 @@ def main() -> int:
 
     if args.log_interval < 1:
         print("--log-interval must be >= 1.")
+        return 1
+
+    if args.max_tasks_per_child < 0:
+        print("--max-tasks-per-child must be >= 0.")
         return 1
 
     if not input_dir.is_dir():
@@ -252,12 +260,22 @@ def main() -> int:
 
     job_iter = iter(job_payloads)
     active_futures = set()
+    pool_broken = False
+    pool_error = ""
 
-    with ProcessPoolExecutor(max_workers=workers) as executor:
+    executor_kwargs = {"max_workers": workers}
+    if args.max_tasks_per_child > 0:
+        executor_kwargs["max_tasks_per_child"] = args.max_tasks_per_child
+
+    with ProcessPoolExecutor(**executor_kwargs) as executor:
         for _ in range(workers):
             try:
                 active_futures.add(executor.submit(_process_file, *next(job_iter)))
             except StopIteration:
+                break
+            except BrokenProcessPool as exc:
+                pool_broken = True
+                pool_error = str(exc)
                 break
 
         while active_futures:
@@ -282,21 +300,33 @@ def main() -> int:
                     active_futures.add(executor.submit(_process_file, *next(job_iter)))
                 except StopIteration:
                     pass
+                except BrokenProcessPool as exc:
+                    pool_broken = True
+                    pool_error = str(exc)
+                    active_futures.clear()
 
                 if not args.quiet and (done % args.log_interval == 0 or done == total_pending):
-                    core_status = _format_core_status(len(active_futures), workers)
                     processed = skipped + done
                     print(
                         f"\rProcessed files: {processed}/{overall_total} | "
-                        f"Success={ok} Failed={failed} | Core status: {core_status}",
+                        f"Success={ok} Failed={failed}",
                         end="",
                         flush=True,
                     )
 
-                if not success and not args.quiet:
-                    print(f"\nFailed: {modelname} | {detail}", flush=True)
-
                 break
+
+            if pool_broken:
+                break
+
+    if pool_broken:
+        print()
+        print("Batch interrupted: process pool became unavailable.")
+        print("This usually means a worker crashed (native error/OOM) during one file.")
+        if pool_error:
+            print(f"Pool error: {pool_error}")
+        print("Tip: rerun with smaller --workers and lower --max-tasks-per-child.")
+        return 3
 
     if not args.quiet:
         print()

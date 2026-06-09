@@ -514,7 +514,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
         story_label = best_range[0] + story_idx + 1
 
         for wall_idx, wall_face in enumerate(wall_faces):
-            core_cat.append("2")
+            core_cat.append("0")
             core_idd.append(f"core_wall_{story_label}_{wall_idx}")
             core_normal.append(np.asarray(wall_normals[wall_idx], dtype=float))
             core_faces.append(wall_face)

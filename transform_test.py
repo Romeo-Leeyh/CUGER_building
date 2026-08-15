@@ -111,7 +111,7 @@ def _process_file(
                 break_wall_horizontal=True,
                 solve_redundant=True,
                 attach_shading=False,
-                standardize=True,
+                standardize=False,
                 stdout=io.StringIO(),
             )
 

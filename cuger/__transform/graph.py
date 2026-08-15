@@ -1,4 +1,4 @@
-"""
+﻿"""
     This module defines the MoosasGraph class, which constructs a graph representation of building spaces and faces based on the provided geo file data. The graph captures the relationships between spaces and their bounding faces, as well as the attributes of those faces (e.g., type, geometry). The class includes methods for building the graph, cleaning isolated nodes, merging airwall nodes, embedding outer layer edges, and visualizing the graph in 3D.
 """
 
@@ -26,6 +26,7 @@ SPACE_PARAM_TEMPLATE = {
     "s": None,
     "r": None,
     "l": 0,         # indicates whether the face is exposed to the outside
+    "space_type": "room",
 }
 
 def create_obb(points, normal, min_scale = 0.1):
@@ -212,10 +213,12 @@ class MoosasGraph:
             try:
                 sid = space.find('id').text.strip()
                 is_void = space.find('is_void').text == 'True'
+                space_params = SPACE_PARAM_TEMPLATE.copy()
+                space_params["space_type"] = (space.findtext("space_type") or "room")
                 self.graph.add_node(
                     sid,
                     node_type="void" if is_void else "space",
-                    space_params=SPACE_PARAM_TEMPLATE.copy()
+                    space_params=space_params
                 )
             except Exception as e:
                 print(f"[Space Node Error] {e}")
@@ -329,6 +332,8 @@ class MoosasGraph:
                         node["face_params"]['t'] = "airwall"
                     elif c in (1, 5, 6):
                         node["face_params"]['t'] = "window"
+                    elif node["face_params"].get("t") == "floor" and abs(n[2]) < 0.99:
+                        node["face_params"]['t'] = "roof"
 
                 except Exception as e:
                     print(f"[Face Param Error] nodeid={nodeid}, {e}")

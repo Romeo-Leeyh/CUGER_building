@@ -13,7 +13,7 @@ if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
 import moosas.MoosasPy as Moosas
-from moosas.MoosasPy.encoding.convexify import MoosasConvexify
+from moosas.MoosasPy.transform.geometry.convexify import GeometryConvexifier
 from moosas.MoosasPy.encoding.graphIO import read_geo, write_geo
 
 DEFAULT_INPUT_DIR = Path("cuger/tests/examples")
@@ -85,7 +85,7 @@ def is_file_processed(modelname: str, output_dir: Path) -> bool:
 
 def _convexify_input_geo(input_geo_path: str):
     categories, face_ids, normals, faces, holes = read_geo(input_geo_path)
-    return MoosasConvexify.convexify_faces(
+    return GeometryConvexifier.convexify_faces(
         categories,
         face_ids,
         normals,

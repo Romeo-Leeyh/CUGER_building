@@ -4,7 +4,7 @@
 
 import os
 
-import pygeos
+import shapely
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,7 +40,7 @@ def create_obb(points, normal, min_scale = 0.1):
         obb_params: dict containing OBB parameters
     """
     # Create a local coordinate frame using the z-axis and the provided normal
-    geometry = pygeos.multipoints(points)
+    geometry = shapely.multipoints(points)
     z_axis = np.array([0,0,1])
     z_r = normal
     
@@ -48,11 +48,11 @@ def create_obb(points, normal, min_scale = 0.1):
     if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:  # check normal near z-axis
 
         z_r = z_axis
-        # Use pygeos to compute the minimum rotated rectangle (2D OBB projection)
-        min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
+        # Use Shapely to compute the minimum rotated rectangle (2D OBB projection)
+        min_rotated_rectangle = shapely.minimum_rotated_rectangle(geometry)
         
         # Get OBB coordinates
-        obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1] 
+        obb_coords = np.array(shapely.get_coordinates(min_rotated_rectangle, include_z=True)) [:-1]
         obb_coords = np.nan_to_num(obb_coords, nan=points[0,2])
         obb_coords[:,2] = (np.min(points[:, 2])+ np.max(points[:, 2]))/2
 
@@ -61,6 +61,8 @@ def create_obb(points, normal, min_scale = 0.1):
             centroid = np.mean(points, axis=0)
             x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
             rotation = np.array([x_r, y_r, z_r])
+            if np.linalg.det(rotation) < 0:
+                rotation[1] *= -1
             rotation_matrix = R.from_matrix(rotation).as_matrix()
             l = max(np.ptp(points[:, 0]), min_scale)
             w = max(np.ptp(points[:, 1]), min_scale)
@@ -88,6 +90,8 @@ def create_obb(points, normal, min_scale = 0.1):
                 y_r = np.array([0, 1, 0])  # default y direction
 
             rotation = np.array([x_r, y_r, z_r])
+            if np.linalg.det(rotation) < 0:
+                rotation[1] *= -1
             rotation_matrix = R.from_matrix(rotation).as_matrix()
 
             l = np.linalg.norm(obb_coords[1] - obb_coords[0])
@@ -101,6 +105,8 @@ def create_obb(points, normal, min_scale = 0.1):
         y_r = np.cross(z_r, x_r)
 
         rotation = np.array([x_r, y_r, z_r])
+        if np.linalg.det(rotation) < 0:
+            rotation[1] *= -1
         rotation_matrix = R.from_matrix(rotation).as_matrix()
         
 

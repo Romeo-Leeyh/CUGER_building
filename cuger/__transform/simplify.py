@@ -9,7 +9,7 @@
 import math
 
 import numpy as np
-import pygeos
+import shapely
 from .geometry import create_obb, obb_to_face_vertices, calculate_wwr, GeometryBasic, GeometryOperator
 
 
@@ -119,28 +119,28 @@ def _face_to_xy_polygon(face):
     if np.linalg.norm(xy[0] - xy[-1]) > 1e-8:
         xy = np.vstack((xy, xy[0]))
 
-    polygon = pygeos.polygons(xy)
-    if pygeos.is_empty(polygon) or pygeos.get_dimensions(polygon) != 2:
+    polygon = shapely.polygons(xy)
+    if shapely.is_empty(polygon) or shapely.get_dimensions(polygon) != 2:
         return None
     return polygon
 
 
 def _largest_polygon_part(geometry):
-    if geometry is None or pygeos.is_empty(geometry):
+    if geometry is None or shapely.is_empty(geometry):
         return None
 
-    if pygeos.get_type_id(geometry) == 3:
+    if shapely.get_type_id(geometry) == 3:
         return geometry
 
     parts = [
         part
-        for part in pygeos.get_parts(geometry)
-        if pygeos.get_dimensions(part) == 2 and not pygeos.is_empty(part)
+        for part in shapely.get_parts(geometry)
+        if shapely.get_dimensions(part) == 2 and not shapely.is_empty(part)
     ]
     if not parts:
         return None
 
-    return max(parts, key=lambda part: float(pygeos.area(part)))
+    return max(parts, key=lambda part: float(shapely.area(part)))
 
 
 def _intersect_xy_polygons(polygons):
@@ -149,18 +149,18 @@ def _intersect_xy_polygons(polygons):
 
     intersection = polygons[0]
     for polygon in polygons[1:]:
-        intersection = pygeos.intersection(intersection, polygon)
-        if pygeos.is_empty(intersection) or pygeos.get_dimensions(intersection) != 2:
+        intersection = shapely.intersection(intersection, polygon)
+        if shapely.is_empty(intersection) or shapely.get_dimensions(intersection) != 2:
             return None
 
     polygon = _largest_polygon_part(intersection)
-    if polygon is None or float(pygeos.area(polygon)) <= 1e-6:
+    if polygon is None or float(shapely.area(polygon)) <= 1e-6:
         return None
     return polygon
 
 
 def _project_polygon_bounds(polygon, x_axis, y_axis):
-    coords = np.asarray(pygeos.get_coordinates(pygeos.get_exterior_ring(polygon)), dtype=float)[:-1, :2]
+    coords = np.asarray(shapely.get_coordinates(shapely.get_exterior_ring(polygon)), dtype=float)[:-1, :2]
     proj_x = coords @ x_axis
     proj_y = coords @ y_axis
     return (
@@ -183,7 +183,7 @@ def _build_rect_polygon(center_xy, x_axis, y_axis, span_x, span_y):
         ],
         dtype=float,
     )
-    return pygeos.polygons(np.vstack((rect_xy, rect_xy[0])))
+    return shapely.polygons(np.vstack((rect_xy, rect_xy[0])))
 
 
 def _projected_center_to_world(min_x, max_x, min_y, max_y, x_axis, y_axis):
@@ -211,17 +211,17 @@ def _fit_rect_in_polygon(polygon, x_axis, y_axis, target_area, preferred_center_
     if preferred_center_xy is not None:
         preferred_center_xy = np.asarray(preferred_center_xy, dtype=float)
         if preferred_center_xy.shape == (2,):
-            if bool(pygeos.contains(polygon, pygeos.points(preferred_center_xy))):
+            if bool(shapely.contains(polygon, shapely.points(preferred_center_xy))):
                 center_xy = preferred_center_xy
 
     if center_xy is None:
         center_xy = _projected_center_to_world(min_x, max_x, min_y, max_y, x_axis, y_axis)
-    center_point = pygeos.points(center_xy)
-    if not bool(pygeos.contains(polygon, center_point)):
-        center_geom = pygeos.centroid(polygon)
-        if not bool(pygeos.contains(polygon, center_geom)):
-            center_geom = pygeos.point_on_surface(polygon)
-        center_xy = np.asarray(pygeos.get_coordinates(center_geom), dtype=float)[0, :2]
+    center_point = shapely.points(center_xy)
+    if not bool(shapely.contains(polygon, center_point)):
+        center_geom = shapely.centroid(polygon)
+        if not bool(shapely.contains(polygon, center_geom)):
+            center_geom = shapely.point_on_surface(polygon)
+        center_xy = np.asarray(shapely.get_coordinates(center_geom), dtype=float)[0, :2]
 
     aspect_ratio = max(span_x / max(span_y, 1e-8), 1e-8)
     rect_span_x = math.sqrt(target_area * aspect_ratio)
@@ -245,7 +245,7 @@ def _fit_rect_in_polygon(polygon, x_axis, y_axis, target_area, preferred_center_
             rect_span_x * scale,
             rect_span_y * scale,
         )
-        return bool(pygeos.contains(polygon, rect_polygon))
+        return bool(shapely.contains(polygon, rect_polygon))
 
     low = 0.0
     high = 1.0
@@ -337,7 +337,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
         if common_polygon is None:
             continue
 
-        level_area = float(pygeos.area(common_polygon))
+        level_area = float(shapely.area(common_polygon))
         min_x, max_x, min_y, max_y = _project_polygon_bounds(common_polygon, x_axis, y_axis)
         level_center = _projected_center_to_world(min_x, max_x, min_y, max_y, x_axis, y_axis)
         level_info.append(
@@ -367,7 +367,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
                 if candidate_polygon is None:
                     continue
 
-                available_area = float(pygeos.area(candidate_polygon))
+                available_area = float(shapely.area(candidate_polygon))
                 story_count = end - start
                 average_candidate_area = float(
                     np.mean([level["area"] for level in selected_candidate_levels])
@@ -391,7 +391,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
                 )
                 fallback_candidates.append(candidate)
 
-                if bool(pygeos.contains(candidate_polygon, pygeos.points(preferred_candidate_center))):
+                if bool(shapely.contains(candidate_polygon, shapely.points(preferred_candidate_center))):
                     centered_candidates.append(candidate)
 
         candidate_pool = centered_candidates or fallback_candidates
@@ -425,7 +425,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
                 if candidate_polygon is None:
                     continue
 
-                available_area = float(pygeos.area(candidate_polygon))
+                available_area = float(shapely.area(candidate_polygon))
                 story_count = end - start
                 rect_candidate_area = min(target_area, available_area)
                 preferred_candidate_center = np.mean(
@@ -444,7 +444,7 @@ def inject_minimal_core(cat, idd, normal, faces, holes, core_area_ratio=0.2, lod
                 )
                 fallback_candidates.append(candidate)
 
-                if bool(pygeos.contains(candidate_polygon, pygeos.points(preferred_candidate_center))):
+                if bool(shapely.contains(candidate_polygon, shapely.points(preferred_candidate_center))):
                     centered_candidates.append(candidate)
 
         candidate_pool = centered_candidates or fallback_candidates

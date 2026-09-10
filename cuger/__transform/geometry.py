@@ -4,7 +4,7 @@ Contains basic geometry classes, validators, and operators.
 """
 
 import numpy as np
-import pygeos
+import shapely
 from typing import Union, List, Tuple, Optional
 from collections import defaultdict
 from scipy.spatial.transform import Rotation as R
@@ -704,14 +704,14 @@ def create_obb(points, normal, min_scale=0.1):
     dict
         OBB parameters including center, scale, rotation
     """
-    geometry = pygeos.multipoints(points)
+    geometry = shapely.multipoints(points)
     z_axis = np.array([0, 0, 1])
     z_r = normal
     
     if np.abs(z_r[0]) <= 1e-3 and np.abs(z_r[1]) <= 1e-3:
         z_r = z_axis
-        min_rotated_rectangle = pygeos.minimum_rotated_rectangle(geometry)
-        obb_coords = np.array(pygeos.get_coordinates(min_rotated_rectangle, include_z=True))[:-1]
+        min_rotated_rectangle = shapely.minimum_rotated_rectangle(geometry)
+        obb_coords = np.array(shapely.get_coordinates(min_rotated_rectangle, include_z=True))[:-1]
         obb_coords = np.nan_to_num(obb_coords, nan=points[0, 2])
         obb_coords[:, 2] = (np.min(points[:, 2]) + np.max(points[:, 2])) / 2
 
@@ -719,6 +719,8 @@ def create_obb(points, normal, min_scale=0.1):
             centroid = np.mean(points, axis=0)
             x_r, y_r = np.array([1, 0, 0]), np.array([0, 1, 0])
             rotation = np.array([x_r, y_r, z_r])
+            if np.linalg.det(rotation) < 0:
+                rotation[1] *= -1
             rotation_matrix = R.from_matrix(rotation).as_matrix()
             l = max(np.ptp(points[:, 0]), min_scale)
             w = max(np.ptp(points[:, 1]), min_scale)
@@ -735,6 +737,8 @@ def create_obb(points, normal, min_scale=0.1):
             y_r = y_vec / y_norm if y_norm > 1e-6 else np.array([0, 1, 0])
 
             rotation = np.array([x_r, y_r, z_r])
+            if np.linalg.det(rotation) < 0:
+                rotation[1] *= -1
             rotation_matrix = R.from_matrix(rotation).as_matrix()
 
             l = np.linalg.norm(obb_coords[1] - obb_coords[0])
@@ -748,6 +752,8 @@ def create_obb(points, normal, min_scale=0.1):
         y_r = np.cross(z_r, x_r)
 
         rotation = np.array([x_r, y_r, z_r])
+        if np.linalg.det(rotation) < 0:
+            rotation[1] *= -1
         rotation_matrix = R.from_matrix(rotation).as_matrix()
         
         rotated_points = points.dot(rotation_matrix.T)
